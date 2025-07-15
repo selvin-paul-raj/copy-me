@@ -346,16 +346,6 @@ export default function SharedTextApp() {
                 ref={textareaRef}
                 value={text}
                 onChange={(e) => handleTextChange(e.target.value)}
-                placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
-
-✨ Perfect for:
-• Drafting content before sharing
-• Quick text sharing between devices
-• Real-time collaboration (after publishing)
-• Code snippet sharing  
-• Live note-taking
-
-Hit 'Publish' to sync your content with everyone connected!"
                 className="min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
                 aria-label="Shared text area for real-time collaboration"
               />
