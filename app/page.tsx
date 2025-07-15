@@ -22,9 +22,9 @@ export default function SharedTextApp() {
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const pollingRef = useRef<NodeJS.Timeout>()
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
-  const heartbeatRef = useRef<NodeJS.Timeout>()
+  const isUpdatingFromServer = useRef(false)
   const { toast } = useToast()
 
   // Generate unique user ID
@@ -32,110 +32,109 @@ export default function SharedTextApp() {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
   }, [])
 
-  // Send heartbeat to keep user active
-  const sendHeartbeat = useCallback(async () => {
+  // Fetch latest content from server
+  const fetchLatestContent = useCallback(async () => {
     try {
-      await fetch("/api/heartbeat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: userIdRef.current,
-          isTyping: isTyping,
-        }),
-      })
-    } catch (error) {
-      console.error("Heartbeat failed:", error)
-    }
-  }, [isTyping])
+      const response = await fetch(`/api/sync?userId=${userIdRef.current}`)
+      if (response.ok) {
+        const data = await response.json()
 
-  // Setup real-time connection
-  useEffect(() => {
-    // Create Server-Sent Events connection
-    eventSourceRef.current = new EventSource(`/api/stream?userId=${userIdRef.current}`)
-
-    eventSourceRef.current.onopen = () => {
-      setIsConnected(true)
-      console.log("Connected to real-time stream")
-    }
-
-    eventSourceRef.current.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-
-        switch (data.type) {
-          case "text_update":
-            if (data.userId !== userIdRef.current) {
-              setText(data.content)
-              setLastActivity(Date.now())
-            }
-            break
-
-          case "users_update":
-            setUsers(data.users || [])
-            break
-
-          case "user_typing":
-            if (data.userId !== userIdRef.current) {
-              setUsers((prev) =>
-                prev.map((user) => (user.id === data.userId ? { ...user, isTyping: data.isTyping } : user)),
-              )
-            }
-            break
+        // Only update if content is different and we're not currently typing
+        if (data.content !== text && !isUpdatingFromServer.current) {
+          isUpdatingFromServer.current = true
+          setText(data.content)
+          setLastActivity(Date.now())
+          setTimeout(() => {
+            isUpdatingFromServer.current = false
+          }, 100)
         }
-      } catch (error) {
-        console.error("Error parsing SSE data:", error)
+
+        setUsers(data.users || [])
+        setIsConnected(true)
       }
-    }
-
-    eventSourceRef.current.onerror = () => {
+    } catch (error) {
       setIsConnected(false)
-      console.log("SSE connection error")
+      console.error("Fetch error:", error)
     }
+  }, [text])
 
-    // Setup heartbeat
-    heartbeatRef.current = setInterval(sendHeartbeat, 2000)
+  // Start polling for updates
+  useEffect(() => {
+    // Initial fetch
+    fetchLatestContent()
+
+    // Set up polling interval
+    pollingRef.current = setInterval(fetchLatestContent, 1000) // Poll every second
 
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-      }
-      if (heartbeatRef.current) {
-        clearInterval(heartbeatRef.current)
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current)
       }
     }
-  }, [sendHeartbeat])
+  }, [fetchLatestContent])
 
-  // Handle text changes with real-time sync
-  const handleTextChange = useCallback(async (value: string) => {
-    setText(value)
-    setIsTyping(true)
-    setLastActivity(Date.now())
+  // Send text updates to server
+  const updateTextOnServer = useCallback(async (newText: string) => {
+    if (isUpdatingFromServer.current) return // Don't send updates while receiving from server
 
-    // Clear existing typing timeout
-    if (typingTimeoutRef.current) {
-      clearTimeout(typingTimeoutRef.current)
-    }
-
-    // Send text update immediately
     try {
-      await fetch("/api/text", {
+      const response = await fetch("/api/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          content: value,
+          content: newText,
           userId: userIdRef.current,
           timestamp: Date.now(),
+          isTyping: true,
         }),
       })
-    } catch (error) {
-      console.error("Failed to sync text:", error)
-    }
 
-    // Set typing indicator timeout
-    typingTimeoutRef.current = setTimeout(() => {
-      setIsTyping(false)
-    }, 1000)
+      if (response.ok) {
+        setIsConnected(true)
+      }
+    } catch (error) {
+      setIsConnected(false)
+      console.error("Update error:", error)
+    }
   }, [])
+
+  // Handle text changes
+  const handleTextChange = useCallback(
+    (value: string) => {
+      if (isUpdatingFromServer.current) return // Don't update while receiving from server
+
+      setText(value)
+      setIsTyping(true)
+      setLastActivity(Date.now())
+
+      // Send update to server
+      updateTextOnServer(value)
+
+      // Clear existing typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current)
+      }
+
+      // Set typing indicator timeout
+      typingTimeoutRef.current = setTimeout(() => {
+        setIsTyping(false)
+        // Send typing stopped update
+        fetch("/api/sync", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            content: value,
+            userId: userIdRef.current,
+            timestamp: Date.now(),
+            isTyping: false,
+          }),
+        }).catch(console.error)
+      }, 1500)
+    },
+    [updateTextOnServer],
+  )
 
   const copyToClipboard = async () => {
     try {
