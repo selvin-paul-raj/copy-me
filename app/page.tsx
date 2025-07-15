@@ -6,6 +6,17 @@ import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
 import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 
 interface User {
   id: string
@@ -18,14 +29,14 @@ export default function SharedTextApp() {
   const [users, setUsers] = useState<User[]>([])
   const [isConnected, setIsConnected] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
-  const [lastActivity, setLastActivity] = useState(Date.now())
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false) // State for clear all confirmation dialog
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
   const pollingRef = useRef<NodeJS.Timeout>()
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
-  const lastSyncedServerTextRef = useRef("") // Stores the last text successfully received from the server
+  const lastKnownServerTextRef = useRef("") // Stores the last text successfully received from the server
 
   const { toast } = useToast()
 
@@ -58,16 +69,18 @@ export default function SharedTextApp() {
         const data = await response.json()
         const serverContent = data.content || ""
 
+        // Always update the last known server text reference
+        lastKnownServerTextRef.current = serverContent
+
         // Only update local text if:
         // 1. We don't have unpublished changes (meaning our local text is already synced or we just published)
-        // 2. OR, if the server content is different from what we last synced from the server (another user published)
-        // AND, the server content is actually different from our current local text state
-        if ((!hasUnpublishedChanges || serverContent !== lastSyncedServerTextRef.current) && serverContent !== text) {
+        // 2. AND the server content is genuinely different from our current local text state.
+        // This prevents overwriting local edits and avoids unnecessary re-renders.
+        if (!hasUnpublishedChanges && serverContent !== text) {
           setText(serverContent)
-          setLastActivity(Date.now())
-          setHasUnpublishedChanges(false) // If we just synced from server, no local unpublished changes
+          // No need to set hasUnpublishedChanges to false here, as it's already false
+          // or will be set to false by handlePublish if it was just called.
         }
-        lastSyncedServerTextRef.current = serverContent // Always update this ref with the latest from server
 
         setUsers(data.users || [])
         setIsConnected(true)
@@ -76,7 +89,7 @@ export default function SharedTextApp() {
       setIsConnected(false)
       console.error("Fetch error:", error)
     }
-  }, [hasUnpublishedChanges, text]) // Depend on hasUnpublishedChanges and text
+  }, [hasUnpublishedChanges, text])
 
   // Setup polling for updates and send periodic heartbeats
   useEffect(() => {
@@ -99,7 +112,7 @@ export default function SharedTextApp() {
   const handleTextChange = useCallback(
     (value: string) => {
       setText(value)
-      setHasUnpublishedChanges(true)
+      setHasUnpublishedChanges(true) // Mark as having unpublished changes
       setIsTyping(true)
 
       if (typingTimeoutRef.current) {
@@ -129,9 +142,11 @@ export default function SharedTextApp() {
       })
 
       if (response.ok) {
-        const data = await response.json() // Get the response data
-        setText(data.content) // Explicitly set text from server response to ensure consistency
-        lastSyncedServerTextRef.current = data.content // Update the last synced ref
+        const data = await response.json()
+        // Crucially, update local state and server ref with the *confirmed* content from the server response.
+        // This ensures immediate consistency and prevents the glitch.
+        setText(data.content)
+        lastKnownServerTextRef.current = data.content
         setHasUnpublishedChanges(false) // No unpublished changes after successful publish
         setIsConnected(true)
         toast({
@@ -173,15 +188,35 @@ export default function SharedTextApp() {
     }
   }
 
-  const clearText = () => {
-    setText("")
-    setHasUnpublishedChanges(true) // Clearing locally means it's now different from server
-    toast({
-      title: "🗑️ Cleared Locally",
-      description: "Your text has been cleared on this device. Click 'Publish' to clear for everyone.",
-      duration: 3000,
-    })
+  // Combined clear function
+  const handleClear = () => {
+    if (hasUnpublishedChanges) {
+      // If there are unpublished changes, clear locally only
+      setText("")
+      setHasUnpublishedChanges(true) // Still has unpublished changes (empty string)
+      toast({
+        title: "🗑️ Cleared Locally",
+        description: "Your text has been cleared on this device. Click 'Publish' to clear for everyone.",
+        duration: 3000,
+      })
+    } else {
+      // If local text is synced with server, prompt for global clear
+      setShowClearAllConfirm(true)
+    }
   }
+
+  // Function to confirm and clear all (publish empty content)
+  const confirmClearAll = useCallback(async () => {
+    setText("") // Clear local text immediately
+    setHasUnpublishedChanges(true) // Mark as unpublished (empty string)
+    setShowClearAllConfirm(false) // Close dialog
+    await handlePublish() // Publish the empty string to clear for everyone
+    toast({
+      title: "🗑️ Cleared for All",
+      description: "The text has been cleared for all connected users.",
+      duration: 2500,
+    })
+  }, [handlePublish])
 
   const activeUsers = users.filter((user) => Date.now() - user.lastSeen < 10000)
   const typingUsers = activeUsers.filter((user) => user.isTyping && user.id !== userIdRef.current)
@@ -258,15 +293,32 @@ export default function SharedTextApp() {
               </div>
 
               <div className="flex gap-2">
-                <Button
-                  onClick={clearText}
-                  variant="outline"
-                  size="sm"
-                  disabled={!text.trim() && !hasUnpublishedChanges}
-                  className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
-                >
-                  Clear Local
-                </Button>
+                <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      onClick={handleClear}
+                      variant="outline"
+                      size="sm"
+                      disabled={!text.trim() && !hasUnpublishedChanges}
+                      className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
+                    >
+                      Clear
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action will clear the text for ALL connected users. This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={confirmClearAll}>Clear for Everyone</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+
                 <Button
                   onClick={copyToClipboard}
                   size="sm"

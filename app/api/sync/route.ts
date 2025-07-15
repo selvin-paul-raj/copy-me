@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// Global state for real-time data (in production, use Redis or similar for persistence)
+// Global state for real-time data (in production, use Redis or a database for persistence)
 const globalState = {
   content: "",
   lastUpdate: Date.now(),
@@ -10,7 +10,7 @@ const globalState = {
 // Clean up inactive users
 function cleanupUsers() {
   const now = Date.now()
-  const TIMEOUT = 500000 // Users considered inactive after 
+  const TIMEOUT = 30000 // Users considered inactive after 30 seconds
 
   for (const [userId, user] of globalState.users.entries()) {
     if (now - user.lastSeen > TIMEOUT) {
