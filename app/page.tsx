@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Copy, Users, Wifi, WifiOff, Activity, Zap } from "lucide-react"
+import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload } from "lucide-react" // Added Upload icon
 import { useToast } from "@/hooks/use-toast"
 
 interface User {
@@ -19,6 +19,7 @@ export default function SharedTextApp() {
   const [isConnected, setIsConnected] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [lastActivity, setLastActivity] = useState(Date.now())
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false) // New state for unpublished changes
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
@@ -32,6 +33,24 @@ export default function SharedTextApp() {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
   }, [])
 
+  // Send heartbeat to keep user active and update typing status
+  const sendHeartbeat = useCallback(async () => {
+    try {
+      await fetch("/api/sync", {
+        // Using /api/sync for heartbeat as well
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: userIdRef.current,
+          isTyping: isTyping,
+          // No content sent with heartbeat, only user status
+        }),
+      })
+    } catch (error) {
+      console.error("Heartbeat failed:", error)
+    }
+  }, [isTyping])
+
   // Fetch latest content from server
   const fetchLatestContent = useCallback(async () => {
     try {
@@ -40,13 +59,11 @@ export default function SharedTextApp() {
         const data = await response.json()
 
         // Only update if content is different and we're not currently typing
+        // This prevents overwriting user's local changes if they haven't published yet
         if (data.content !== text && !isUpdatingFromServer.current) {
-          isUpdatingFromServer.current = true
           setText(data.content)
           setLastActivity(Date.now())
-          setTimeout(() => {
-            isUpdatingFromServer.current = false
-          }, 100)
+          setHasUnpublishedChanges(true) // If server has different content, local is "unpublished" relative to server
         }
 
         setUsers(data.users || [])
@@ -58,59 +75,35 @@ export default function SharedTextApp() {
     }
   }, [text])
 
-  // Start polling for updates
+  // Start polling for updates and send heartbeats
   useEffect(() => {
     // Initial fetch
     fetchLatestContent()
 
-    // Set up polling interval
+    // Set up polling interval for content and user updates
     pollingRef.current = setInterval(fetchLatestContent, 1000) // Poll every second
+
+    // Set up heartbeat interval for typing status
+    const heartbeatInterval = setInterval(sendHeartbeat, 2000) // Send heartbeat every 2 seconds
 
     return () => {
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
       }
-    }
-  }, [fetchLatestContent])
-
-  // Send text updates to server
-  const updateTextOnServer = useCallback(async (newText: string) => {
-    if (isUpdatingFromServer.current) return // Don't send updates while receiving from server
-
-    try {
-      const response = await fetch("/api/sync", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          content: newText,
-          userId: userIdRef.current,
-          timestamp: Date.now(),
-          isTyping: true,
-        }),
-      })
-
-      if (response.ok) {
-        setIsConnected(true)
+      if (heartbeatInterval) {
+        clearInterval(heartbeatInterval)
       }
-    } catch (error) {
-      setIsConnected(false)
-      console.error("Update error:", error)
     }
-  }, [])
+  }, [fetchLatestContent, sendHeartbeat])
 
-  // Handle text changes
+  // Handle text changes (local update only)
   const handleTextChange = useCallback(
     (value: string) => {
-      if (isUpdatingFromServer.current) return // Don't update while receiving from server
-
+      isUpdatingFromServer.current = true // Temporarily block incoming updates
       setText(value)
+      setHasUnpublishedChanges(true) // Mark as having unpublished changes
       setIsTyping(true)
       setLastActivity(Date.now())
-
-      // Send update to server
-      updateTextOnServer(value)
 
       // Clear existing typing timeout
       if (typingTimeoutRef.current) {
@@ -120,21 +113,52 @@ export default function SharedTextApp() {
       // Set typing indicator timeout
       typingTimeoutRef.current = setTimeout(() => {
         setIsTyping(false)
-        // Send typing stopped update
-        fetch("/api/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            content: value,
-            userId: userIdRef.current,
-            timestamp: Date.now(),
-            isTyping: false,
-          }),
-        }).catch(console.error)
+        // Send a final heartbeat to indicate typing has stopped
+        sendHeartbeat()
       }, 1500)
+
+      // Allow incoming updates again after a short delay
+      setTimeout(() => {
+        isUpdatingFromServer.current = false
+      }, 100)
     },
-    [updateTextOnServer],
+    [sendHeartbeat],
   )
+
+  // Function to publish text to the server
+  const handlePublish = useCallback(async () => {
+    try {
+      const response = await fetch("/api/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: text,
+          userId: userIdRef.current,
+          timestamp: Date.now(),
+          isTyping: false, // Not typing after publishing
+        }),
+      })
+
+      if (response.ok) {
+        setHasUnpublishedChanges(false) // No unpublished changes after successful publish
+        setIsConnected(true)
+        toast({
+          title: "🚀 Published!",
+          description: "Your changes are now live for everyone.",
+          duration: 2000,
+        })
+      }
+    } catch (error) {
+      setIsConnected(false)
+      console.error("Failed to publish text:", error)
+      toast({
+        title: "❌ Publish Failed",
+        description: "Could not publish your changes. Please try again.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    }
+  }, [text, toast])
 
   const copyToClipboard = async () => {
     try {
@@ -158,11 +182,11 @@ export default function SharedTextApp() {
   }
 
   const clearText = () => {
-    handleTextChange("")
+    handleTextChange("") // Use handleTextChange to clear locally and mark as unpublished
     toast({
       title: "🗑️ Cleared",
-      description: "Text cleared for all users",
-      duration: 1500,
+      description: "Text cleared locally. Publish to clear for all users.",
+      duration: 2500,
     })
   }
 
@@ -186,7 +210,7 @@ export default function SharedTextApp() {
             </h1>
           </div>
           <p className="text-lg text-gray-600 mb-6">
-            Real-time collaborative text editor • Type anywhere, sync everywhere
+            Real-time collaborative text editor • Type anywhere, publish to sync everywhere
           </p>
 
           {/* Dynamic Status Bar */}
@@ -231,11 +255,11 @@ export default function SharedTextApp() {
                   <span className="text-sm font-medium text-gray-700">Shared Workspace</span>
                 </div>
 
-                {/* Live Activity Indicator */}
-                {Date.now() - lastActivity < 3000 && (
-                  <div className="flex items-center gap-1 text-xs text-green-600 animate-fade-in">
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-ping"></div>
-                    <span>Live update</span>
+                {/* Unpublished Changes Indicator */}
+                {hasUnpublishedChanges && (
+                  <div className="flex items-center gap-1 text-xs text-orange-600 animate-fade-in">
+                    <div className="w-2 h-2 bg-orange-400 rounded-full animate-ping"></div>
+                    <span>Unpublished changes</span>
                   </div>
                 )}
               </div>
@@ -248,7 +272,7 @@ export default function SharedTextApp() {
                   disabled={!text.trim()}
                   className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
                 >
-                  Clear All
+                  Clear Local
                 </Button>
                 <Button
                   onClick={copyToClipboard}
@@ -259,6 +283,15 @@ export default function SharedTextApp() {
                   <Copy className="w-4 h-4" />
                   Copy All
                 </Button>
+                <Button
+                  onClick={handlePublish}
+                  size="sm"
+                  disabled={!hasUnpublishedChanges || !text.trim()} // Disable if no changes or text is empty
+                  className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
+                >
+                  <Upload className="w-4 h-4" />
+                  Publish
+                </Button>
               </div>
             </div>
 
@@ -268,16 +301,16 @@ export default function SharedTextApp() {
                 ref={textareaRef}
                 value={text}
                 onChange={(e) => handleTextChange(e.target.value)}
-                placeholder="🚀 Start typing here... Your changes sync instantly across all devices!
+                placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
 
 ✨ Perfect for:
+• Drafting content before sharing
 • Quick text sharing between devices
-• Real-time collaboration
+• Real-time collaboration (after publishing)
 • Code snippet sharing  
 • Live note-taking
-• Team brainstorming sessions
 
-Everything you type appears immediately for everyone connected!"
+Hit 'Publish' to sync your content with everyone connected!"
                 className="min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
                 aria-label="Shared text area for real-time collaboration"
               />
@@ -310,7 +343,7 @@ Everything you type appears immediately for everyone connected!"
                 {isConnected && (
                   <>
                     <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <span className="text-green-600 font-medium">Auto-sync active</span>
+                    <span className="text-green-600 font-medium">Polling for updates</span>
                   </>
                 )}
               </div>
@@ -333,7 +366,7 @@ Everything you type appears immediately for everyone connected!"
             <span>•</span>
             <div className="flex items-center gap-2">
               <span>⚡</span>
-              <span>Real-time synchronization</span>
+              <span>Manual synchronization via Publish</span>
             </div>
           </div>
         </div>
