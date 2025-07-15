@@ -7,9 +7,9 @@ import { Toaster } from "@/components/ui/toaster"
 const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: "Live Shared Clipboard - Real-time Text Sharing",
+  title: "Copy-ME - Real-time Text Sharing",
   description: "Share and sync text in real-time with multiple users. Works like a live whiteboard for text.",
-    generator: 'v0.dev'
+    generator: 'Selvin PaulRaj K'
 }
 
 export default function RootLayout({
