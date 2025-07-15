@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      content: globalState.content, // Return the confirmed content
       timestamp: globalState.lastUpdate,
       userCount: globalState.users.size,
       users: Array.from(globalState.users.values()),
