@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload } from "lucide-react"
+import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload, RefreshCw } from "lucide-react" // Added RefreshCw icon
 import { useToast } from "@/hooks/use-toast"
 import {
   AlertDialog,
@@ -30,20 +30,22 @@ export default function SharedTextApp() {
   const [isConnected, setIsConnected] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
-  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false) // State for clear all confirmation dialog
+  const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
+  const [isFetching, setIsFetching] = useState(false) // New state for refresh loading
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
-  const pollingRef = useRef<NodeJS.Timeout>()
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
-  const lastKnownServerTextRef = useRef("") // Stores the last text successfully received from the server
+  const lastKnownServerTextRef = useRef("")
 
   const { toast } = useToast()
 
   // Generate unique user ID on component mount
   useEffect(() => {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
-  }, [])
+    // Initial fetch on component mount
+    fetchLatestContent()
+  }, []) // Empty dependency array means this runs once on mount
 
   // Send heartbeat to keep user active and update typing status
   const sendHeartbeat = useCallback(async () => {
@@ -63,23 +65,17 @@ export default function SharedTextApp() {
 
   // Fetch latest content and user list from server
   const fetchLatestContent = useCallback(async () => {
+    setIsFetching(true) // Set fetching state to true
     try {
       const response = await fetch(`/api/sync?userId=${userIdRef.current}`)
       if (response.ok) {
         const data = await response.json()
         const serverContent = data.content || ""
 
-        // Always update the last known server text reference
         lastKnownServerTextRef.current = serverContent
 
-        // Only update local text if:
-        // 1. We don't have unpublished changes (meaning our local text is already synced or we just published)
-        // 2. AND the server content is genuinely different from our current local text state.
-        // This prevents overwriting local edits and avoids unnecessary re-renders.
         if (!hasUnpublishedChanges && serverContent !== text) {
           setText(serverContent)
-          // No need to set hasUnpublishedChanges to false here, as it's already false
-          // or will be set to false by handlePublish if it was just called.
         }
 
         setUsers(data.users || [])
@@ -88,31 +84,33 @@ export default function SharedTextApp() {
     } catch (error) {
       setIsConnected(false)
       console.error("Fetch error:", error)
+      toast({
+        title: "⚠️ Connection Issue",
+        description: "Could not fetch latest content. Please check your connection.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    } finally {
+      setIsFetching(false) // Reset fetching state
     }
-  }, [hasUnpublishedChanges, text])
+  }, [hasUnpublishedChanges, text, toast])
 
-  // Setup polling for updates and send periodic heartbeats
+  // Setup periodic heartbeats (polling for user activity, not content)
   useEffect(() => {
-    fetchLatestContent() // Initial fetch
-
-    pollingRef.current = setInterval(fetchLatestContent, 1000)
     const heartbeatInterval = setInterval(sendHeartbeat, 2000)
 
     return () => {
-      if (pollingRef.current) {
-        clearInterval(pollingRef.current)
-      }
       if (heartbeatInterval) {
         clearInterval(heartbeatInterval)
       }
     }
-  }, [fetchLatestContent, sendHeartbeat])
+  }, [sendHeartbeat])
 
   // Handle local text changes in the textarea
   const handleTextChange = useCallback(
     (value: string) => {
       setText(value)
-      setHasUnpublishedChanges(true) // Mark as having unpublished changes
+      setHasUnpublishedChanges(true)
       setIsTyping(true)
 
       if (typingTimeoutRef.current) {
@@ -134,20 +132,18 @@ export default function SharedTextApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: text, // Send the current local text
+          content: text,
           userId: userIdRef.current,
           timestamp: Date.now(),
-          isTyping: false, // Not typing after publishing
+          isTyping: false,
         }),
       })
 
       if (response.ok) {
         const data = await response.json()
-        // Crucially, update local state and server ref with the *confirmed* content from the server response.
-        // This ensures immediate consistency and prevents the glitch.
         setText(data.content)
         lastKnownServerTextRef.current = data.content
-        setHasUnpublishedChanges(false) // No unpublished changes after successful publish
+        setHasUnpublishedChanges(false)
         setIsConnected(true)
         toast({
           title: "🚀 Published!",
@@ -191,26 +187,24 @@ export default function SharedTextApp() {
   // Combined clear function
   const handleClear = () => {
     if (hasUnpublishedChanges) {
-      // If there are unpublished changes, clear locally only
       setText("")
-      setHasUnpublishedChanges(true) // Still has unpublished changes (empty string)
+      setHasUnpublishedChanges(true)
       toast({
         title: "🗑️ Cleared Locally",
         description: "Your text has been cleared on this device. Click 'Publish' to clear for everyone.",
         duration: 3000,
       })
     } else {
-      // If local text is synced with server, prompt for global clear
       setShowClearAllConfirm(true)
     }
   }
 
   // Function to confirm and clear all (publish empty content)
   const confirmClearAll = useCallback(async () => {
-    setText("") // Clear local text immediately
-    setHasUnpublishedChanges(true) // Mark as unpublished (empty string)
-    setShowClearAllConfirm(false) // Close dialog
-    await handlePublish() // Publish the empty string to clear for everyone
+    setText("")
+    setHasUnpublishedChanges(true)
+    setShowClearAllConfirm(false)
+    await handlePublish()
     toast({
       title: "🗑️ Cleared for All",
       description: "The text has been cleared for all connected users.",
@@ -251,7 +245,7 @@ export default function SharedTextApp() {
               }`}
             >
               {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-              <span className="font-medium">{isConnected ? "Live Connected" : "Reconnecting..."}</span>
+              <span className="font-medium">{isConnected ? "Live Connected" : "Disconnected"}</span>
             </div>
 
             <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full shadow-blue-200 shadow-lg">
@@ -293,6 +287,16 @@ export default function SharedTextApp() {
               </div>
 
               <div className="flex gap-2">
+                <Button
+                  onClick={fetchLatestContent}
+                  variant="outline"
+                  size="sm"
+                  disabled={isFetching}
+                  className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors bg-transparent"
+                >
+                  <RefreshCw className={isFetching ? "animate-spin" : ""} />
+                  Refresh
+                </Button>
                 <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -346,6 +350,16 @@ export default function SharedTextApp() {
                 ref={textareaRef}
                 value={text}
                 onChange={(e) => handleTextChange(e.target.value)}
+                placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
+
+✨ Perfect for:
+• Drafting content before sharing
+• Quick text sharing between devices
+• Real-time collaboration (after publishing)
+• Code snippet sharing  
+• Live note-taking
+
+Hit 'Publish' to sync your content with everyone connected!"
                 className="min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
                 aria-label="Shared text area for real-time collaboration"
               />
@@ -375,10 +389,15 @@ export default function SharedTextApp() {
               </div>
 
               <div className="flex items-center gap-2">
-                {isConnected && (
+                {isFetching ? (
                   <>
-                    <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></div>
-                    <span className="text-green-600 font-medium">Polling for updates</span>
+                    <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+                    <span className="text-blue-600 font-medium">Refreshing...</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-green-600 font-medium">Ready for refresh</span>
                   </>
                 )}
               </div>
