@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// Global state for real-time data (in production, use Redis or similar)
+// Global state for real-time data (in production, use Redis or similar for persistence)
 const globalState = {
   content: "",
   lastUpdate: Date.now(),
@@ -10,7 +10,7 @@ const globalState = {
 // Clean up inactive users
 function cleanupUsers() {
   const now = Date.now()
-  const TIMEOUT = 30000 // 30 seconds
+  const TIMEOUT = 30000 // Users considered inactive after 30 seconds
 
   for (const [userId, user] of globalState.users.entries()) {
     if (now - user.lastSeen > TIMEOUT) {
@@ -23,17 +23,17 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
   const userId = searchParams.get("userId") || ""
 
-  // Update user activity
+  // Update user's last seen timestamp
   if (userId) {
     const existingUser = globalState.users.get(userId)
     globalState.users.set(userId, {
       id: userId,
       lastSeen: Date.now(),
-      isTyping: existingUser?.isTyping || false,
+      isTyping: existingUser?.isTyping || false, // Preserve typing status
     })
   }
 
-  // Clean up inactive users
+  // Perform cleanup before sending response
   cleanupUsers()
 
   return NextResponse.json({
@@ -49,13 +49,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { content, userId, timestamp, isTyping } = body
 
-    // Update global content
+    // Only update global content if 'content' is explicitly provided in the payload.
+    // This distinguishes a 'publish' action from a 'heartbeat'.
     if (content !== undefined) {
       globalState.content = content
       globalState.lastUpdate = timestamp || Date.now()
     }
 
-    // Update user activity and typing status
+    // Always update user activity and typing status
     if (userId) {
       globalState.users.set(userId, {
         id: userId,
@@ -64,7 +65,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Clean up inactive users
+    // Perform cleanup after updating state
     cleanupUsers()
 
     return NextResponse.json({

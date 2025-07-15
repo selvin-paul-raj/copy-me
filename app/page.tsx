@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload } from "lucide-react" // Added Upload icon
+import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface User {
@@ -19,16 +19,16 @@ export default function SharedTextApp() {
   const [isConnected, setIsConnected] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
   const [lastActivity, setLastActivity] = useState(Date.now())
-  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false) // New state for unpublished changes
+  const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false) // Tracks if local text differs from last published
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
   const pollingRef = useRef<NodeJS.Timeout>()
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
-  const isUpdatingFromServer = useRef(false)
+  const lastPublishedTextRef = useRef("") // Stores the last text successfully published/synced from server
   const { toast } = useToast()
 
-  // Generate unique user ID
+  // Generate unique user ID on component mount
   useEffect(() => {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
   }, [])
@@ -37,7 +37,6 @@ export default function SharedTextApp() {
   const sendHeartbeat = useCallback(async () => {
     try {
       await fetch("/api/sync", {
-        // Using /api/sync for heartbeat as well
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -51,19 +50,21 @@ export default function SharedTextApp() {
     }
   }, [isTyping])
 
-  // Fetch latest content from server
+  // Fetch latest content and user list from server
   const fetchLatestContent = useCallback(async () => {
     try {
       const response = await fetch(`/api/sync?userId=${userIdRef.current}`)
       if (response.ok) {
         const data = await response.json()
 
-        // Only update if content is different and we're not currently typing
-        // This prevents overwriting user's local changes if they haven't published yet
-        if (data.content !== text && !isUpdatingFromServer.current) {
+        // Only update local text if there are no unpublished changes
+        // or if the incoming text is different from what we last published/synced.
+        // This prevents overwriting user's local edits.
+        if (!hasUnpublishedChanges || data.content !== lastPublishedTextRef.current) {
           setText(data.content)
+          lastPublishedTextRef.current = data.content // Update last published text
           setLastActivity(Date.now())
-          setHasUnpublishedChanges(true) // If server has different content, local is "unpublished" relative to server
+          setHasUnpublishedChanges(false) // If we just synced from server, no local unpublished changes
         }
 
         setUsers(data.users || [])
@@ -73,11 +74,11 @@ export default function SharedTextApp() {
       setIsConnected(false)
       console.error("Fetch error:", error)
     }
-  }, [text])
+  }, [hasUnpublishedChanges]) // Depend on hasUnpublishedChanges to re-evaluate logic
 
-  // Start polling for updates and send heartbeats
+  // Setup polling for updates and send periodic heartbeats
   useEffect(() => {
-    // Initial fetch
+    // Initial fetch to get current content
     fetchLatestContent()
 
     // Set up polling interval for content and user updates
@@ -87,6 +88,7 @@ export default function SharedTextApp() {
     const heartbeatInterval = setInterval(sendHeartbeat, 2000) // Send heartbeat every 2 seconds
 
     return () => {
+      // Cleanup intervals on component unmount
       if (pollingRef.current) {
         clearInterval(pollingRef.current)
       }
@@ -96,31 +98,24 @@ export default function SharedTextApp() {
     }
   }, [fetchLatestContent, sendHeartbeat])
 
-  // Handle text changes (local update only)
+  // Handle local text changes in the textarea
   const handleTextChange = useCallback(
     (value: string) => {
-      isUpdatingFromServer.current = true // Temporarily block incoming updates
-      setText(value)
+      setText(value) // Update local text immediately
       setHasUnpublishedChanges(true) // Mark as having unpublished changes
-      setIsTyping(true)
-      setLastActivity(Date.now())
+      setIsTyping(true) // Set typing status
 
       // Clear existing typing timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current)
       }
 
-      // Set typing indicator timeout
+      // Set new typing indicator timeout
       typingTimeoutRef.current = setTimeout(() => {
         setIsTyping(false)
         // Send a final heartbeat to indicate typing has stopped
         sendHeartbeat()
       }, 1500)
-
-      // Allow incoming updates again after a short delay
-      setTimeout(() => {
-        isUpdatingFromServer.current = false
-      }, 100)
     },
     [sendHeartbeat],
   )
@@ -132,7 +127,7 @@ export default function SharedTextApp() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          content: text,
+          content: text, // Send the current local text
           userId: userIdRef.current,
           timestamp: Date.now(),
           isTyping: false, // Not typing after publishing
@@ -141,6 +136,7 @@ export default function SharedTextApp() {
 
       if (response.ok) {
         setHasUnpublishedChanges(false) // No unpublished changes after successful publish
+        lastPublishedTextRef.current = text // Update last published text reference
         setIsConnected(true)
         toast({
           title: "🚀 Published!",
@@ -158,7 +154,7 @@ export default function SharedTextApp() {
         duration: 3000,
       })
     }
-  }, [text, toast])
+  }, [text, toast]) // Depend on 'text' to ensure we send the latest content
 
   const copyToClipboard = async () => {
     try {
@@ -182,11 +178,12 @@ export default function SharedTextApp() {
   }
 
   const clearText = () => {
-    handleTextChange("") // Use handleTextChange to clear locally and mark as unpublished
+    setText("") // Clear local text
+    setHasUnpublishedChanges(true) // Mark as having unpublished changes
     toast({
-      title: "🗑️ Cleared",
-      description: "Text cleared locally. Publish to clear for all users.",
-      duration: 2500,
+      title: "🗑️ Cleared Locally",
+      description: "Your text has been cleared on this device. Click 'Publish' to clear for everyone.",
+      duration: 3000,
     })
   }
 
@@ -269,7 +266,7 @@ export default function SharedTextApp() {
                   onClick={clearText}
                   variant="outline"
                   size="sm"
-                  disabled={!text.trim()}
+                  disabled={!text.trim() && !hasUnpublishedChanges} // Disable if already empty and no changes
                   className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
                 >
                   Clear Local
@@ -286,7 +283,7 @@ export default function SharedTextApp() {
                 <Button
                   onClick={handlePublish}
                   size="sm"
-                  disabled={!hasUnpublishedChanges || !text.trim()} // Disable if no changes or text is empty
+                  disabled={!hasUnpublishedChanges} // Only enable if there are unpublished changes
                   className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
                 >
                   <Upload className="w-4 h-4" />
