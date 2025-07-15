@@ -10,7 +10,7 @@ const globalState = {
 // Clean up inactive users
 function cleanupUsers() {
   const now = Date.now()
-  const TIMEOUT = 30000 // Users considered inactive after 30 seconds
+  const TIMEOUT = 500000 // Users considered inactive after 
 
   for (const [userId, user] of globalState.users.entries()) {
     if (now - user.lastSeen > TIMEOUT) {
