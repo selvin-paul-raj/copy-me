@@ -1,6 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
 
-// Global state for real-time data (in production, use Redis or a database for persistence)
+// IMPORTANT: This globalState is an in-memory object and is NOT suitable for
+// production deployments with multiple instances (e.g., on Vercel's serverless functions).
+// Each serverless function instance would have its own independent globalState,
+// leading to inconsistent data across users.
+//
+// For a truly scalable and production-grade real-time application, you MUST use
+// an external, persistent data store like Redis, PostgreSQL, or a dedicated
+// real-time database (e.g., Supabase Realtime, Firebase, or a WebSocket server
+// that manages state).
+
+// Example of how Redis might be used (conceptual, not executable in this environment):
+/*
+import { Redis } from '@upstash/redis'; // Or your preferred Redis client
+
+const redis = new Redis({
+  url: process.env.KV_REST_API_URL || 'YOUR_REDIS_URL',
+  token: process.env.KV_REST_API_TOKEN || 'YOUR_REDIS_TOKEN',
+});
+
+// Instead of globalState, you would interact with Redis:
+// await redis.set('shared_text_content', content);
+// const content = await redis.get('shared_text_content');
+// For users, you might use a Redis Hash or Sorted Set:
+// await redis.hset('active_users', userId, JSON.stringify({ lastSeen: Date.now(), isTyping }));
+// const usersData = await redis.hgetall('active_users');
+// Then parse usersData and filter by lastSeen.
+*/
+
+// Current in-memory global state (for demonstration purposes only)
 const globalState = {
   content: "",
   lastUpdate: Date.now(),

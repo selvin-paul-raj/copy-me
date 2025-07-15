@@ -4,7 +4,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload, RefreshCw } from "lucide-react" // Added RefreshCw icon
+import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload, RefreshCw } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import {
   AlertDialog,
@@ -31,21 +31,21 @@ export default function SharedTextApp() {
   const [isTyping, setIsTyping] = useState(false)
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
-  const [isFetching, setIsFetching] = useState(false) // New state for refresh loading
+  const [isFetching, setIsFetching] = useState(false)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
   const typingTimeoutRef = useRef<NodeJS.Timeout>()
   const lastKnownServerTextRef = useRef("")
+  const debounceTimeoutRef = useRef<NodeJS.Timeout>() // New ref for debouncing text updates
 
   const { toast } = useToast()
 
   // Generate unique user ID on component mount
   useEffect(() => {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
-    // Initial fetch on component mount
-    fetchLatestContent()
-  }, []) // Empty dependency array means this runs once on mount
+    fetchLatestContent() // Initial fetch
+  }, [])
 
   // Send heartbeat to keep user active and update typing status
   const sendHeartbeat = useCallback(async () => {
@@ -65,18 +65,20 @@ export default function SharedTextApp() {
 
   // Fetch latest content and user list from server
   const fetchLatestContent = useCallback(async () => {
-    setIsFetching(true) // Set fetching state to true
+    setIsFetching(true)
     try {
       const response = await fetch(`/api/sync?userId=${userIdRef.current}`)
       if (response.ok) {
         const data = await response.json()
         const serverContent = data.content || ""
 
-        lastKnownServerTextRef.current = serverContent
-
-        if (!hasUnpublishedChanges && serverContent !== text) {
+        // Only update local text if there are no local unpublished changes
+        // AND the server content is different from the last known server text.
+        // This prevents overwriting local edits and unnecessary re-renders.
+        if (!hasUnpublishedChanges && serverContent !== lastKnownServerTextRef.current) {
           setText(serverContent)
         }
+        lastKnownServerTextRef.current = serverContent // Always update the last known server text reference
 
         setUsers(data.users || [])
         setIsConnected(true)
@@ -91,9 +93,9 @@ export default function SharedTextApp() {
         duration: 3000,
       })
     } finally {
-      setIsFetching(false) // Reset fetching state
+      setIsFetching(false)
     }
-  }, [hasUnpublishedChanges, text, toast])
+  }, [hasUnpublishedChanges, toast]) // Removed 'text' from dependencies to avoid re-triggering when local text changes
 
   // Setup periodic heartbeats (polling for user activity, not content)
   useEffect(() => {
@@ -106,21 +108,31 @@ export default function SharedTextApp() {
     }
   }, [sendHeartbeat])
 
-  // Handle local text changes in the textarea
+  // Handle local text changes in the textarea with debouncing
   const handleTextChange = useCallback(
     (value: string) => {
+      // Update local state immediately for smooth typing experience
       setText(value)
       setHasUnpublishedChanges(true)
       setIsTyping(true)
 
+      // Clear previous typing timeout
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current)
       }
-
+      // Set new typing timeout to mark user as not typing after a pause
       typingTimeoutRef.current = setTimeout(() => {
         setIsTyping(false)
-        sendHeartbeat()
+        sendHeartbeat() // Send heartbeat to update typing status
       }, 1500)
+
+      // Clear previous debounce timeout for content update
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+      // Set new debounce timeout to update server text (if needed, though we have publish button)
+      // This part is less critical now with the explicit publish button, but good for future auto-save features.
+      // For now, we rely on the publish button for server sync.
     },
     [sendHeartbeat],
   )
@@ -141,8 +153,8 @@ export default function SharedTextApp() {
 
       if (response.ok) {
         const data = await response.json()
-        setText(data.content)
-        lastKnownServerTextRef.current = data.content
+        setText(data.content) // Update local state with confirmed server content
+        lastKnownServerTextRef.current = data.content // Update server ref
         setHasUnpublishedChanges(false)
         setIsConnected(true)
         toast({
@@ -236,7 +248,9 @@ export default function SharedTextApp() {
           </p>
 
           {/* Dynamic Status Bar */}
-          <div className="flex items-center justify-center gap-6 text-sm">
+          <div className="flex flex-wrap items-center justify-center gap-4 text-sm sm:gap-6">
+            {" "}
+            {/* Adjusted gap and added flex-wrap */}
             <div
               className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${
                 isConnected
@@ -247,12 +261,10 @@ export default function SharedTextApp() {
               {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
               <span className="font-medium">{isConnected ? "Live Connected" : "Disconnected"}</span>
             </div>
-
             <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full shadow-blue-200 shadow-lg">
               <Users className="w-4 h-4" />
               <span className="font-medium">{activeUsers.length + 1} Online</span>
             </div>
-
             {typingUsers.length > 0 && (
               <div className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-full shadow-orange-200 shadow-lg animate-pulse">
                 <Activity className="w-4 h-4" />
@@ -266,7 +278,9 @@ export default function SharedTextApp() {
         <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden">
           <div className="p-6">
             {/* Toolbar */}
-            <div className="flex gap-3 justify-between items-center mb-4">
+            <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
+              {" "}
+              {/* Added flex-wrap */}
               <div className="flex items-center gap-3">
                 <div className="flex items-center gap-2">
                   <div
@@ -285,8 +299,9 @@ export default function SharedTextApp() {
                   </div>
                 )}
               </div>
-
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
+                {" "}
+                {/* Added flex-wrap */}
                 <Button
                   onClick={fetchLatestContent}
                   variant="outline"
@@ -322,7 +337,6 @@ export default function SharedTextApp() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-
                 <Button
                   onClick={copyToClipboard}
                   size="sm"
@@ -360,7 +374,7 @@ export default function SharedTextApp() {
 • Live note-taking
 
 Hit 'Publish' to sync your content with everyone connected!"
-                className="min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
+                className="min-h-[50vh] md:min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50" // Adjusted min-height
                 aria-label="Shared text area for real-time collaboration"
               />
 
@@ -373,8 +387,12 @@ Hit 'Publish' to sync your content with everyone connected!"
             </div>
 
             {/* Dynamic Stats Bar */}
-            <div className="flex justify-between items-center mt-4 text-sm">
-              <div className="flex items-center gap-6 text-gray-500">
+            <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
+              {" "}
+              {/* Added flex-wrap and gap */}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
+                {" "}
+                {/* Adjusted gap and added flex-wrap */}
                 <span className="font-medium">{text.length.toLocaleString()} characters</span>
                 <span>•</span>
                 <span>{text.split("\n").length.toLocaleString()} lines</span>
@@ -387,7 +405,6 @@ Hit 'Publish' to sync your content with everyone connected!"
                   words
                 </span>
               </div>
-
               <div className="flex items-center gap-2">
                 {isFetching ? (
                   <>
@@ -407,7 +424,9 @@ Hit 'Publish' to sync your content with everyone connected!"
 
         {/* Footer Info */}
         <div className="mt-8 text-center">
-          <div className="inline-flex items-center gap-6 px-8 py-4 bg-white/60 rounded-2xl text-sm text-gray-600 backdrop-blur-sm shadow-lg">
+          <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
+            {" "}
+            {/* Adjusted padding, gap, and added flex-wrap */}
             <div className="flex items-center gap-2">
               <span>🔒</span>
               <span>No registration required</span>
