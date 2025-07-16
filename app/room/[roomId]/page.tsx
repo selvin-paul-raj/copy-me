@@ -533,7 +533,7 @@ export default function RoomPage() {
         <h1 className="text-4xl font-bold text-red-700 mb-4">Room Not Found</h1>
         <p className="text-lg text-gray-700 mb-8">The room with ID "{roomId}" does not exist or has expired.</p>
         <Button onClick={() => router.push("/")} className="bg-red-600 hover:bg-red-700 text-white">
-          <Home className="w-5 h-5 mr-2" /> Go to Home
+          <Home className="w-5 h-5 mr-2 bg-gray-400" /> Go to Home
         </Button>
         <p className="mt-4 text-xs text-gray-500">
           &copy; {new Date().getFullYear()} Copy-ME by{" "}
@@ -547,7 +547,7 @@ export default function RoomPage() {
 
   return (
     <SidebarProvider defaultOpen={true}>
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 flex">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 flex w-full">
         {/* Username Modal */}
         <Dialog open={showUsernameModal} onOpenChange={setShowUsernameModal}>
           <DialogContent className="sm:max-w-[425px]" aria-describedby="username-dialog-description">
@@ -822,13 +822,13 @@ export default function RoomPage() {
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 {" "}
                 {/* Reduced font sizes */}
-                Copy-ME: Room <code>{roomId}</code>
+                Copy-ME :  <code className="text-red-400">{roomId}</code>
               </h1>
             </div>
             <p className="text-sm sm:text-base text-gray-600 mb-1">
               {" "}
               {/* Reduced font size and mb-2 to mb-1 */}
-              Collaborative text editor • Type anywhere, publish to sync everywhere
+              Collaborative text editor  • Type anywhere, publish to sync everywhere
             </p>
             {expiresAt && (
               <p className="text-sm text-gray-500 mb-2">
@@ -854,12 +854,12 @@ export default function RoomPage() {
             </div>
           </div>
           {/* Main Editor Card */}
-          <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden flex-1 flex flex-col w-full">
+          <Card className="shadow-2xl bg-white/0 backdrop-blur-sm border-0 overflow-hidden flex-1 h-full flex flex-col w-full">
             {" "}
             {/* Added w-full */}
-            <div className="p-4 sm:p-6 flex flex-col flex-1">
+            <div className="p-4 sm:p-6 flex flex-col flex-2  ">
               {/* Toolbar */}
-              <div className="flex flex-wrap gap-2 sm:gap-3 justify-between items-center mb-4">
+              <div className="flex flex-wrap gap-2 sm:gap-3 justify-between items-center mb-4 ">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div
                     className={`w-3 h-3 rounded-full transition-colors duration-300 ${
@@ -944,28 +944,19 @@ export default function RoomPage() {
               </div>
             </div>
             {/* Text Editor */}
-            <div className="relative flex-1">
+            <div className="relative flex-1 p-4 ">
               <Textarea
                 ref={textareaRef}
                 value={text}
                 onChange={(e) => handleTextChange(e.target.value)}
-                placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
-
-✨ Perfect for:
-• Drafting content before sharing
-• Quick text sharing between devices
-• Collaborative text editing (after publishing)
-• Code snippet sharing  
-• Note-taking
-
-Hit 'Publish' to sync your content with everyone connected!"
+                placeholder="🚀 Start typing here... "
                 className="h-full w-full resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
                 aria-label="Shared text area for real-time collaboration"
                 disabled={!currentUsernameRef.current}
               />
             </div>
             {/* Dynamic Stats Bar */}
-            <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
+            <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2 p-4">
               <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
                 <span className="font-medium">{text.length.toLocaleString()} characters</span>
                 <span>•</span>
@@ -996,22 +987,6 @@ Hit 'Publish' to sync your content with everyone connected!"
           </Card>
           {/* Footer Info */}
           <div className="mt-8 text-center pb-4 px-4 md:px-6">
-            <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-xs sm:text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
-              <div className="flex items-center gap-2">
-                <span>🔒</span>
-                <span>No registration required</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <span>💾</span>
-                <span>Data ephemeral per room</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <span>⚡</span>
-                <span>Manual synchronization via Publish</span>
-              </div>
-            </div>
             <p className="mt-4 text-xs text-gray-500">
               &copy; {new Date().getFullYear()} Copy-ME by{" "}
               <a
