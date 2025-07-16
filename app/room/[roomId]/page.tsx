@@ -86,7 +86,7 @@ export default function RoomPage() {
   const [isPublishing, setIsPublishing] = useState(false) // New loading state for publish
   const [isAddingNotebook, setIsAddingNotebook] = useState(false) // New loading state for add notebook
   const [isDeletingNotebook, setIsDeletingNotebook] = useState(false) // New loading state for delete notebook
-  const [roomExistsOnServer, setRoomExistsOnServer] = true
+  const [roomExistsOnServer, setRoomExistsOnServer] = useState(true)
   const [showUsernameModal, setShowUsernameModal] = useState(false)
   const [localUsername, setLocalUsername] = useState("")
   const [notebooks, setNotebooks] = useState<Notebook[]>([])
@@ -805,13 +805,9 @@ export default function RoomPage() {
             </Button>
           </SidebarFooter>
         </Sidebar>
-        <SidebarInset className="flex-1 flex flex-col p-0 md:p-0">
-          {" "}
-          {/* Removed outer padding */}
+        <SidebarInset className="flex-1 flex flex-col p-2 md:p-4">
           {/* Header */}
-          <div className="mb-4 text-center pt-4 px-4 md:px-6">
-            {" "}
-            {/* Reduced mb-8 to mb-4, added pt-4 */}
+          <div className="mb-8 text-center">
             <div className="flex items-center justify-center gap-3 mb-2">
               <div className="relative">
                 <Zap className="w-8 h-8 text-blue-600" />
@@ -848,9 +844,7 @@ export default function RoomPage() {
             </div>
           </div>
           {/* Main Editor Card */}
-          <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden flex-1 flex flex-col mx-4 md:mx-6">
-            {" "}
-            {/* Added horizontal margins */}
+          <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden flex-1 flex flex-col">
             <div className="p-4 sm:p-6 flex flex-col flex-1">
               {/* Toolbar */}
               <div className="flex flex-wrap gap-2 sm:gap-3 justify-between items-center mb-4">
@@ -937,6 +931,7 @@ export default function RoomPage() {
                 </Button>
               </div>
             </div>
+
             {/* Text Editor */}
             <div className="relative flex-1">
               <Textarea
@@ -953,11 +948,12 @@ export default function RoomPage() {
 • Note-taking
 
 Hit 'Publish' to sync your content with everyone connected!"
-                className="h-full w-full resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
+                className="h-full w-full resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50" // Removed min-h and h-full, relying on flex-1 parent
                 aria-label="Shared text area for real-time collaboration"
                 disabled={!currentUsernameRef.current}
               />
             </div>
+
             {/* Dynamic Stats Bar */}
             <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
               <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
@@ -988,38 +984,6 @@ Hit 'Publish' to sync your content with everyone connected!"
               </div>
             </div>
           </Card>
-          {/* Footer Info */}
-          <div className="mt-4 text-center pb-4 px-4 md:px-6">
-            {" "}
-            {/* Reduced mt-8 to mt-4 */}
-            <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-xs sm:text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
-              <div className="flex items-center gap-2">
-                <span>🔒</span>
-                <span>No registration required</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <span>💾</span>
-                <span>Data ephemeral per room</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <span>⚡</span>
-                <span>Manual synchronization via Publish</span>
-              </div>
-            </div>
-            <p className="mt-4 text-xs text-gray-500">
-              &copy; {new Date().getFullYear()} Copy-ME by{" "}
-              <a
-                href="https://github.com/selvin-paul-raj"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                Selvin PaulRaj K
-              </a>
-            </p>
-          </div>
         </SidebarInset>
       </div>
     </SidebarProvider>
