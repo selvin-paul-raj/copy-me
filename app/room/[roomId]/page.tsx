@@ -1,7 +1,5 @@
 "use client"
 
-import { SidebarFooter } from "@/components/ui/sidebar"
-
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -33,20 +31,16 @@ import { Label } from "@/components/ui/label"
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarHeader,
+  SidebarInset, // Import SidebarInset
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarProvider,
-  SidebarTrigger,
 } from "@/components/ui/sidebar"
 import type { Notebook } from "@/lib/db"
-// Removed getSupabaseClient and RealtimeChannel imports as they are no longer used for real-time features
-// Removed updateUserPresenceAction import
-
-// Removed User interface as user presence is no longer tracked
-// Removed HEARTBEAT_INTERVAL and TYPING_TIMEOUT
 
 export default function RoomPage() {
   const params = useParams()
@@ -55,9 +49,7 @@ export default function RoomPage() {
   const roomId = params.roomId as string
 
   const [text, setText] = useState("")
-  // Removed users state
-  const [isConnected, setIsConnected] = useState(false) // Keep for general network status
-  // Removed isTyping state
+  const [isConnected, setIsConnected] = useState(false)
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
@@ -72,16 +64,11 @@ export default function RoomPage() {
   const [notebookToDelete, setNotebookToDelete] = useState<Notebook | null>(null)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const userIdRef = useRef<string>("") // Still useful for unique client ID, even if not for presence
-  // Removed typingTimeoutRef
+  const userIdRef = useRef<string>("")
   const lastKnownServerTextRef = useRef("")
-  const lastPublishedTextRef = useRef("") // To track text last published by THIS client
+  const lastPublishedTextRef = useRef("")
   const currentUsernameRef = useRef<string>("")
-  // Removed presenceChannelRef and dbChannelRef
 
-  // Removed supabase client initialization as Realtime is no longer used
-
-  // Generate unique user ID and handle username on component mount
   useEffect(() => {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
 
@@ -98,17 +85,16 @@ export default function RoomPage() {
     }
 
     if (currentUsernameRef.current) {
-      fetchLatestContent(true) // Force initial fetch of content
+      fetchLatestContent(true)
     }
   }, [searchParams])
 
-  // Update active notebook content when activeNotebookId changes
   useEffect(() => {
     const activeNb = notebooks.find((nb) => nb.id === activeNotebookId)
     if (activeNb) {
       setText(activeNb.content)
       lastKnownServerTextRef.current = activeNb.content
-      lastPublishedTextRef.current = activeNb.content // Assume initial content is published
+      lastPublishedTextRef.current = activeNb.content
       setHasUnpublishedChanges(false)
     }
   }, [activeNotebookId, notebooks])
@@ -128,14 +114,9 @@ export default function RoomPage() {
     currentUsernameRef.current = trimmedUsername
     localStorage.setItem("copy-me-username", trimmedUsername)
     setShowUsernameModal(false)
-    fetchLatestContent(true) // Force fetch after username is set
+    fetchLatestContent(true)
   }
 
-  // Removed Supabase Realtime Setup useEffect
-
-  // Removed useEffect for updating presence with typing status
-
-  // Fetch latest content from server (initial load and manual refresh)
   const fetchLatestContent = useCallback(
     async (forceUpdate = false) => {
       if (!currentUsernameRef.current) return
@@ -157,14 +138,13 @@ export default function RoomPage() {
           const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
           const serverContent = currentNb ? currentNb.content : ""
 
-          // Always update local text with server content on refresh
           setText(serverContent)
           lastKnownServerTextRef.current = serverContent
           if (serverContent === lastPublishedTextRef.current) {
             setHasUnpublishedChanges(false)
           }
 
-          setIsConnected(true) // Indicate general network connection
+          setIsConnected(true)
           setRoomExistsOnServer(true)
         } else if (response.status === 404) {
           setRoomExistsOnServer(false)
@@ -203,7 +183,6 @@ export default function RoomPage() {
   const handleTextChange = useCallback((value: string) => {
     setText(value)
     setHasUnpublishedChanges(true)
-    // Removed isTyping and typingTimeoutRef logic
   }, [])
 
   const handlePublish = useCallback(async () => {
@@ -240,7 +219,6 @@ export default function RoomPage() {
           description: "Your changes are now live for everyone.",
           duration: 2000,
         })
-        // No need to force fetch here, as the POST response already gives the latest state
       } else if (response.status === 404) {
         setRoomExistsOnServer(false)
         setIsConnected(false)
@@ -314,7 +292,6 @@ export default function RoomPage() {
 
   const handleClear = () => {
     if (text.trim() !== "") {
-      // If there's content, clear locally first
       setText("")
       setHasUnpublishedChanges(true)
       toast({
@@ -323,16 +300,15 @@ export default function RoomPage() {
         duration: 3000,
       })
     } else {
-      // If text is already empty, directly ask to clear for everyone
       setShowClearAllConfirm(true)
     }
   }
 
   const confirmClearAll = useCallback(async () => {
     setText("")
-    setHasUnpublishedChanges(true) // Mark as unpublished, then publish
+    setHasUnpublishedChanges(true)
     setShowClearAllConfirm(false)
-    await handlePublish() // Publish empty content to clear for everyone
+    await handlePublish()
     toast({
       title: "🗑️️ Cleared for All",
       description: "The text has been cleared for all connected users.",
@@ -368,7 +344,7 @@ export default function RoomPage() {
       })
 
       if (response.ok) {
-        await fetchLatestContent(true) // Refresh notebooks after adding
+        await fetchLatestContent(true)
         setNewNotebookName("")
         setShowAddNotebookModal(false)
         toast({
@@ -412,7 +388,7 @@ export default function RoomPage() {
       })
 
       if (response.ok) {
-        await fetchLatestContent(true) // Refresh notebooks after deleting
+        await fetchLatestContent(true)
         setNotebookToDelete(null)
         setShowDeleteNotebookConfirm(false)
         toast({
@@ -440,8 +416,6 @@ export default function RoomPage() {
     }
   }
 
-  // Removed useEffect for periodic presence update
-
   if (!roomExistsOnServer) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-red-50 via-orange-50 to-yellow-50 p-4 text-center">
@@ -455,8 +429,10 @@ export default function RoomPage() {
   }
 
   return (
-    <SidebarProvider>
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 flex"> {/* Removed p-4 from here */}
+    <SidebarProvider defaultOpen={true}>
+      {" "}
+      {/* Sidebar always open by default */}
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 flex">
         {/* Username Modal */}
         <Dialog open={showUsernameModal} onOpenChange={setShowUsernameModal}>
           <DialogContent className="sm:max-w-[425px]">
@@ -548,7 +524,11 @@ export default function RoomPage() {
           </AlertDialogContent>
         </AlertDialog>
 
-        <Sidebar className="bg-white/90 backdrop-blur-sm border-r border-gray-200 shadow-lg">
+        <Sidebar
+          collapsible="none" // Make sidebar non-collapsible
+          variant="sidebar" // Use default sidebar variant
+          className="bg-white/90 backdrop-blur-sm border-r border-gray-200 shadow-lg"
+        >
           <SidebarHeader>
             <div className="flex items-center justify-between">
               <h2 className="text-xl font-bold text-gray-800">Notebooks</h2>
@@ -593,13 +573,25 @@ export default function RoomPage() {
             </SidebarGroup>
           </SidebarContent>
           <SidebarFooter>
-            <SidebarTrigger />
+            {/* Removed SidebarTrigger from here as sidebar is static */}
+            <Button
+              onClick={() => router.push("/")}
+              variant="ghost"
+              className="w-full justify-start text-gray-600 hover:bg-gray-100 hover:text-gray-800"
+            >
+              <Home className="mr-2 h-4 w-4" />
+              Go to Home
+            </Button>
           </SidebarFooter>
         </Sidebar>
 
-        <div className="flex-1 max-w-6xl mx-auto py-4 px-4 md:px-6"> {/* Adjusted padding here */}
+        <SidebarInset className="flex-1 flex flex-col">
+          {" "}
+          {/* Use SidebarInset for the main content */}
           {/* Header */}
-          <div className="mb-8 text-center">
+          <div className="mb-8 text-center py-4 px-4 md:px-6">
+            {" "}
+            {/* Adjusted padding here */}
             <div className="flex items-center justify-center gap-3 mb-4">
               <div className="relative">
                 <Zap className="w-8 h-8 text-blue-600" />
@@ -614,7 +606,6 @@ export default function RoomPage() {
             <p className="text-lg text-gray-600 mb-6">
               Collaborative text editor • Type anywhere, publish to sync everywhere
             </p>
-
             {/* Dynamic Status Bar (Simplified) */}
             <div className="flex flex-wrap items-center justify-center gap-4 text-sm sm:gap-6">
               <div
@@ -627,13 +618,15 @@ export default function RoomPage() {
                 {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
                 <span className="font-medium">{isConnected ? "Connected" : "Disconnected"}</span>
               </div>
-              {/* Removed Online Users and Typing Indicators */}
             </div>
           </div>
-
           {/* Main Editor Card */}
-          <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden">
-            <div className="p-6">
+          <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden flex-1 mx-4 md:mx-6 mb-4">
+            {" "}
+            {/* Added flex-1 and margin */}
+            <div className="p-6 flex flex-col h-full">
+              {" "}
+              {/* Added flex-col h-full */}
               {/* Toolbar */}
               <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
                 <div className="flex items-center gap-3">
@@ -656,15 +649,6 @@ export default function RoomPage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Button
-                    onClick={() => router.push("/")}
-                    variant="outline"
-                    size="sm"
-                    className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
-                  >
-                    <Home />
-                    Home
-                  </Button>
-                  <Button
                     onClick={copyRoomLinkToClipboard}
                     variant="outline"
                     size="sm"
@@ -674,7 +658,7 @@ export default function RoomPage() {
                     Share Room
                   </Button>
                   <Button
-                    onClick={() => fetchLatestContent(true)} // Force refresh on click
+                    onClick={() => fetchLatestContent(true)}
                     variant="outline"
                     size="sm"
                     disabled={isFetching}
@@ -689,7 +673,7 @@ export default function RoomPage() {
                         onClick={handleClear}
                         variant="outline"
                         size="sm"
-                        disabled={isFetching} {/* Changed disabled logic */}\
+                        disabled={isFetching}
                         className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
                       >
                         Clear
@@ -728,9 +712,10 @@ export default function RoomPage() {
                   </Button>
                 </div>
               </div>
-
               {/* Text Editor */}
-              <div className="relative">
+              <div className="relative flex-1">
+                {" "}
+                {/* Added flex-1 */}
                 <Textarea
                   ref={textareaRef}
                   value={text}
@@ -745,14 +730,11 @@ export default function RoomPage() {
 • Note-taking
 
 Hit 'Publish' to sync your content with everyone connected!"
-                  className="min-h-[50vh] md:min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
+                  className="min-h-[50vh] md:min-h-[calc(100%-80px)] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50 h-full" // Added h-full
                   aria-label="Shared text area for real-time collaboration"
                   disabled={!currentUsernameRef.current}
                 />
-
-                {/* Removed Typing Indicator Overlay */}
               </div>
-
               {/* Dynamic Stats Bar */}
               <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
                 <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
@@ -784,9 +766,10 @@ Hit 'Publish' to sync your content with everyone connected!"
               </div>
             </div>
           </Card>
-
           {/* Footer Info */}
-          <div className="mt-8 text-center">
+          <div className="mt-8 text-center pb-4 px-4 md:px-6">
+            {" "}
+            {/* Adjusted padding */}
             <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
               <div className="flex items-center gap-2">
                 <span>🔒</span>
@@ -804,7 +787,7 @@ Hit 'Publish' to sync your content with everyone connected!"
               </div>
             </div>
           </div>
-        </div>
+        </SidebarInset>
       </div>
     </SidebarProvider>
   )
