@@ -1,5 +1,7 @@
 "use client"
 
+import { SidebarGroupLabel } from "@/components/ui/sidebar"
+
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -17,6 +19,7 @@ import {
   Trash2,
   FileText,
   Loader2,
+  User,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -54,7 +57,20 @@ import {
   SidebarTrigger, // Re-import SidebarTrigger for mobile
 } from "@/components/ui/sidebar"
 import { LineNumberedTextarea } from "@/components/ui/line-numbered-textarea" // Import new component
-import type { Notebook } from "@/lib/db"
+import type { Notebook, UserPresence } from "@/lib/db" // Import UserPresence
+
+// Helper to format time for the countdown
+const formatTimeRemaining = (ms: number) => {
+  const totalSeconds = Math.floor(ms / 1000)
+  const hours = Math.floor(totalSeconds / 3600)
+  const minutes = Math.floor((totalSeconds % 3600) / 60)
+  const seconds = totalSeconds % 60
+
+  if (ms <= 0) return "Expired"
+  if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`
+  if (minutes > 0) return `${minutes}m ${seconds}s`
+  return `${seconds}s`
+}
 
 export default function RoomPage() {
   const params = useParams()
@@ -79,6 +95,9 @@ export default function RoomPage() {
   const [newNotebookName, setNewNotebookName] = useState("")
   const [showDeleteNotebookConfirm, setShowDeleteNotebookConfirm] = useState(false)
   const [notebookToDelete, setNotebookToDelete] = useState<Notebook | null>(null)
+  const [onlineUsers, setOnlineUsers] = useState<UserPresence[]>([]) // New state for online users
+  const [expiresAt, setExpiresAt] = useState<string | null>(null) // New state for room expiry
+  const [timeRemaining, setTimeRemaining] = useState<number>(0) // New state for countdown
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const userIdRef = useRef<string>("")
@@ -86,11 +105,23 @@ export default function RoomPage() {
   const lastPublishedTextRef = useRef("")
   const currentUsernameRef = useRef<string>("")
 
+  // Initialize userId and username from URL/localStorage
   useEffect(() => {
-    userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
-
     const urlUsername = searchParams.get("username")
+    const urlUserId = searchParams.get("userId")
     const storedUsername = localStorage.getItem("copy-me-username")
+    const storedUserId = localStorage.getItem("copy-me-user-id")
+
+    if (urlUserId) {
+      userIdRef.current = decodeURIComponent(urlUserId)
+      localStorage.setItem("copy-me-user-id", userIdRef.current)
+    } else if (storedUserId) {
+      userIdRef.current = storedUserId
+    } else {
+      // This should ideally not happen if HomePage generates it, but as a fallback
+      userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
+      localStorage.setItem("copy-me-user-id", userIdRef.current)
+    }
 
     if (urlUsername) {
       currentUsernameRef.current = decodeURIComponent(urlUsername)
@@ -101,11 +132,12 @@ export default function RoomPage() {
       setShowUsernameModal(true)
     }
 
-    if (currentUsernameRef.current) {
+    if (currentUsernameRef.current && userIdRef.current) {
       fetchLatestContent(true)
     }
   }, [searchParams])
 
+  // Update active notebook content
   useEffect(() => {
     const activeNb = notebooks.find((nb) => nb.id === activeNotebookId)
     if (activeNb) {
@@ -115,6 +147,26 @@ export default function RoomPage() {
       setHasUnpublishedChanges(false)
     }
   }, [activeNotebookId, notebooks])
+
+  // Room expiry countdown timer
+  useEffect(() => {
+    let timer: NodeJS.Timeout | undefined
+    if (expiresAt) {
+      const calculateTime = () => {
+        const now = Date.now()
+        const expiryTime = new Date(expiresAt).getTime()
+        const remaining = expiryTime - now
+        setTimeRemaining(remaining > 0 ? remaining : 0)
+      }
+
+      calculateTime() // Initial calculation
+      timer = setInterval(calculateTime, 1000)
+    }
+
+    return () => {
+      if (timer) clearInterval(timer)
+    }
+  }, [expiresAt])
 
   const handleUsernameSubmit = () => {
     const trimmedUsername = localUsername.trim()
@@ -136,10 +188,23 @@ export default function RoomPage() {
 
   const fetchLatestContent = useCallback(
     async (forceUpdate = false) => {
-      if (!currentUsernameRef.current) return
+      if (!currentUsernameRef.current || !userIdRef.current) return
 
       setIsFetching(true)
       try {
+        // First, send heartbeat to update user presence
+        const heartbeatResponse = await fetch(`/api/room/${roomId}/heartbeat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId: userIdRef.current, username: currentUsernameRef.current }),
+        })
+
+        if (!heartbeatResponse.ok && heartbeatResponse.status !== 429) {
+          console.error("Heartbeat failed:", await heartbeatResponse.text())
+          // Don't block content fetch if heartbeat fails, but log it
+        }
+
+        // Then, fetch the latest room content and user list
         const response = await fetch(`/api/room/${roomId}`)
         if (response.status === 429) {
           toast({
@@ -152,6 +217,9 @@ export default function RoomPage() {
         } else if (response.ok) {
           const data = await response.json()
           setNotebooks(data.notebooks || [])
+          setOnlineUsers(data.users || []) // Update online users
+          setExpiresAt(data.expiresAt) // Update expiry time
+
           const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
           const serverContent = currentNb ? currentNb.content : ""
 
@@ -203,7 +271,7 @@ export default function RoomPage() {
   }, [])
 
   const handlePublish = useCallback(async () => {
-    if (!roomExistsOnServer || !currentUsernameRef.current) return
+    if (!roomExistsOnServer || !currentUsernameRef.current || !userIdRef.current) return
     setIsPublishing(true) // Set publishing state
     try {
       const response = await fetch(`/api/room/${roomId}`, {
@@ -212,6 +280,8 @@ export default function RoomPage() {
         body: JSON.stringify({
           content: text,
           notebookId: activeNotebookId,
+          userId: userIdRef.current, // Pass userId
+          username: currentUsernameRef.current, // Pass username
         }),
       })
 
@@ -226,6 +296,9 @@ export default function RoomPage() {
       } else if (response.ok) {
         const data = await response.json()
         setNotebooks(data.notebooks)
+        setOnlineUsers(data.users || []) // Update online users
+        setExpiresAt(data.expiresAt) // Update expiry time
+
         const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
         setText(currentNb ? currentNb.content : "")
         lastKnownServerTextRef.current = currentNb ? currentNb.content : ""
@@ -361,7 +434,11 @@ export default function RoomPage() {
       const response = await fetch(`/api/room/${roomId}/add-notebook`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notebookName: newNotebookName.trim() }),
+        body: JSON.stringify({
+          notebookName: newNotebookName.trim(),
+          userId: userIdRef.current, // Pass userId
+          username: currentUsernameRef.current, // Pass username
+        }),
       })
 
       if (response.ok) {
@@ -408,7 +485,11 @@ export default function RoomPage() {
       const response = await fetch(`/api/room/${roomId}/delete-notebook`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ notebookId: notebookToDelete.id }),
+        body: JSON.stringify({
+          notebookId: notebookToDelete.id,
+          userId: userIdRef.current, // Pass userId
+          username: currentUsernameRef.current, // Pass username
+        }),
       })
 
       if (response.ok) {
@@ -420,6 +501,10 @@ export default function RoomPage() {
           description: `Notebook "${notebookToDelete.name}" has been deleted.`,
           duration: 2000,
         })
+        // If the deleted notebook was active, switch to the first remaining notebook
+        if (activeNotebookId === notebookToDelete.id && notebooks.length > 1) {
+          setActiveNotebookId(notebooks.filter((nb) => nb.id !== notebookToDelete.id)[0].id)
+        }
       } else {
         const errorData = await response.json()
         toast({
@@ -450,6 +535,12 @@ export default function RoomPage() {
         <Button onClick={() => router.push("/")} className="bg-red-600 hover:bg-red-700 text-white">
           <Home className="w-5 h-5 mr-2" /> Go to Home
         </Button>
+        <p className="mt-4 text-xs text-gray-500">
+          &copy; {new Date().getFullYear()} Copy-ME by{" "}
+          <a href="https://github.com/selvin-paul-raj" target="_blank" rel="noopener noreferrer" className="underline">
+            Selvin PaulRaj K
+          </a>
+        </p>
       </div>
     )
   }
@@ -459,10 +550,12 @@ export default function RoomPage() {
       <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 flex">
         {/* Username Modal */}
         <Dialog open={showUsernameModal} onOpenChange={setShowUsernameModal}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px]" aria-describedby="username-dialog-description">
             <DialogHeader>
               <DialogTitle>Enter Your Username</DialogTitle>
-              <DialogDescription>Please enter a username to identify yourself in this room.</DialogDescription>
+              <DialogDescription id="username-dialog-description">
+                Please enter a username to identify yourself in this room.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
@@ -492,10 +585,12 @@ export default function RoomPage() {
         </Dialog>
         {/* Add Notebook Modal */}
         <Dialog open={showAddNotebookModal} onOpenChange={setShowAddNotebookModal}>
-          <DialogContent className="sm:max-w-[425px]">
+          <DialogContent className="sm:max-w-[425px]" aria-describedby="add-notebook-dialog-description">
             <DialogHeader>
               <DialogTitle>Add New Notebook</DialogTitle>
-              <DialogDescription>Enter a name for your new notebook.</DialogDescription>
+              <DialogDescription id="add-notebook-dialog-description">
+                Enter a name for your new notebook.
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
               <div className="grid grid-cols-4 items-center gap-4">
@@ -602,6 +697,23 @@ export default function RoomPage() {
                 ))}
               </SidebarMenu>
             </SidebarGroup>
+            {onlineUsers.length > 0 && (
+              <SidebarGroup className="mt-4">
+                <SidebarGroupLabel>Online Users ({onlineUsers.length})</SidebarGroupLabel>
+                <SidebarMenu>
+                  {onlineUsers.map((user) => (
+                    <SidebarMenuItem key={user.id}>
+                      <SidebarMenuButton className="justify-start">
+                        <User className="w-4 h-4" />
+                        <span>
+                          {user.username} {user.id === userIdRef.current ? "(You)" : ""}
+                        </span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
           </SidebarContent>
           <SidebarFooter>
             <Button
@@ -664,6 +776,23 @@ export default function RoomPage() {
                 ))}
               </SidebarMenu>
             </SidebarGroup>
+            {onlineUsers.length > 0 && (
+              <SidebarGroup className="mt-4">
+                <SidebarGroupLabel>Online Users ({onlineUsers.length})</SidebarGroupLabel>
+                <SidebarMenu>
+                  {onlineUsers.map((user) => (
+                    <SidebarMenuItem key={user.id}>
+                      <SidebarMenuButton className="justify-start">
+                        <User className="w-4 h-4" />
+                        <span>
+                          {user.username} {user.id === userIdRef.current ? "(You)" : ""}
+                        </span>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroup>
+            )}
           </SidebarContent>
           <SidebarFooter>
             <Button
@@ -679,7 +808,7 @@ export default function RoomPage() {
         <SidebarInset className="flex-1 flex flex-col p-4 md:p-6">
           {/* Header */}
           <div className="mb-8 text-center">
-            <div className="flex items-center justify-center gap-3 mb-4">
+            <div className="flex items-center justify-center gap-3 mb-2">
               <div className="relative">
                 <Zap className="w-8 h-8 text-blue-600" />
                 {isConnected && (
@@ -690,9 +819,16 @@ export default function RoomPage() {
                 Copy-ME: Room {roomId}
               </h1>
             </div>
-            <p className="text-base sm:text-lg text-gray-600 mb-6">
+            <p className="text-base sm:text-lg text-gray-600 mb-2">
               Collaborative text editor • Type anywhere, publish to sync everywhere
             </p>
+            {expiresAt && (
+              <p className="text-sm text-gray-500 mb-4">
+                Room expires in:{" "}
+                <span className="font-semibold text-blue-700">{formatTimeRemaining(timeRemaining)}</span> (after 24h
+                inactivity)
+              </p>
+            )}
             {/* Dynamic Status Bar (Simplified) */}
             <div className="flex flex-wrap items-center justify-center gap-4 text-sm sm:gap-6">
               <div
@@ -868,6 +1004,17 @@ Hit 'Publish' to sync your content with everyone connected!"
                 <span>Manual synchronization via Publish</span>
               </div>
             </div>
+            <p className="mt-4 text-xs text-gray-500">
+              &copy; {new Date().getFullYear()} Copy-ME by{" "}
+              <a
+                href="https://github.com/selvin-paul-raj"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline"
+              >
+                Selvin PaulRaj K
+              </a>
+            </p>
           </div>
         </SidebarInset>
       </div>

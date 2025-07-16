@@ -42,7 +42,34 @@ export const metadata: Metadata = {
       "max-image-preview": "large",
       "max-snippet": -1,
     },
-  }
+  },
+  openGraph: {
+    title: "Copy-ME: Real-time Shared Clipboard by Selvin PaulRaj K", // Title for social media shares
+    description:
+      "Copy-ME is a minimalistic, real-time web application for instant text sharing and collaboration. Share and sync text across multiple devices, draft privately, and publish to update everyone. No registration, no permanent storage.",
+    url: "https://spr-copy-me.vercel.app", // Replace with your deployed URL
+    siteName: "Copy-ME",
+    images: [
+      {
+        url: "/placeholder.svg", // Consider creating a custom image for better branding
+        width: 1200,
+        height: 630,
+        alt: "Copy-ME: Real-time Shared Clipboard",
+      },
+    ],
+    locale: "en_US",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Copy-ME: Real-time Shared Clipboard by Selvin PaulRaj K",
+    description:
+      "Copy-ME is a minimalistic, real-time web application for instant text sharing and collaboration. Share and sync text across multiple devices, draft privately, and publish to update everyone. No registration, no permanent storage.",
+    creator: "@YOUR_TWITTER_HANDLE", // Replace with your Twitter handle
+    images: ["/placeholder.svg"], // Consider creating a custom image for better branding
+  },,
+  // You can add more specific metadata here if needed, e.g., for specific pages.
+    generator: 'v0.dev'
 }
 
 export default function RootLayout({
