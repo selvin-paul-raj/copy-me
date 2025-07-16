@@ -65,11 +65,10 @@ export const metadata: Metadata = {
     title: "Copy-ME: Real-time Shared Clipboard by Selvin PaulRaj K",
     description:
       "Copy-ME is a minimalistic, real-time web application for instant text sharing and collaboration. Share and sync text across multiple devices, draft privately, and publish to update everyone. No registration, no permanent storage.",
-    creator: "@YOUR_TWITTER_HANDLE", // Replace with your Twitter handle
+    creator: "https://x.com/Selvinpaulraj4", // Replace with your Twitter handle
     images: ["/placeholder.svg"], // Consider creating a custom image for better branding
-  },,
-  // You can add more specific metadata here if needed, e.g., for specific pages.
-    generator: 'v0.dev'
+  },
+  // You can add more specific metadata here if needed, e.g., for specific pages
 }
 
 export default function RootLayout({
