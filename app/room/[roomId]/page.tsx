@@ -98,11 +98,9 @@ export default function RoomPage() {
     }
 
     if (currentUsernameRef.current) {
-      // This is the ONLY automatic call to fetchLatestContent on initial load.
-      // It runs once when the component mounts and username is available.
-      fetchLatestContent(true)
+      fetchLatestContent(true) // Force initial fetch of content
     }
-  }, [searchParams]) // Dependencies are stable, preventing re-runs after initial load.
+  }, [searchParams])
 
   // Update active notebook content when activeNotebookId changes
   useEffect(() => {
@@ -160,7 +158,7 @@ export default function RoomPage() {
           const serverContent = currentNb ? currentNb.content : ""
 
           // Always update local text with server content on refresh
-          setText(serverContent) // This updates the 'text' state.
+          setText(serverContent)
           lastKnownServerTextRef.current = serverContent
           if (serverContent === lastPublishedTextRef.current) {
             setHasUnpublishedChanges(false)
@@ -199,13 +197,13 @@ export default function RoomPage() {
         setIsFetching(false)
       }
     },
-    [roomId, toast, activeNotebookId], // Dependencies for useCallback. 'text' is not a dependency here because it's only set, not read to influence the function's logic.
+    [roomId, toast, activeNotebookId],
   )
 
   const handleTextChange = useCallback((value: string) => {
     setText(value)
     setHasUnpublishedChanges(true)
-    // No network calls or typing indicators triggered here.
+    // Removed isTyping and typingTimeoutRef logic
   }, [])
 
   const handlePublish = useCallback(async () => {
@@ -242,6 +240,7 @@ export default function RoomPage() {
           description: "Your changes are now live for everyone.",
           duration: 2000,
         })
+        // No need to force fetch here, as the POST response already gives the latest state
       } else if (response.status === 404) {
         setRoomExistsOnServer(false)
         setIsConnected(false)
@@ -270,7 +269,7 @@ export default function RoomPage() {
         duration: 3000,
       })
     }
-  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId]) // 'text' is a dependency here because its value is read for the POST request body.
+  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId])
 
   const copyToClipboard = async () => {
     try {
@@ -314,7 +313,8 @@ export default function RoomPage() {
   }
 
   const handleClear = () => {
-    if (hasUnpublishedChanges) {
+    if (text.trim() !== "") {
+      // If there's content, clear locally first
       setText("")
       setHasUnpublishedChanges(true)
       toast({
@@ -323,13 +323,14 @@ export default function RoomPage() {
         duration: 3000,
       })
     } else {
+      // If text is already empty, directly ask to clear for everyone
       setShowClearAllConfirm(true)
     }
   }
 
   const confirmClearAll = useCallback(async () => {
     setText("")
-    setHasUnpublishedChanges(true)
+    setHasUnpublishedChanges(true) // Mark as unpublished, then publish
     setShowClearAllConfirm(false)
     await handlePublish() // Publish empty content to clear for everyone
     toast({
@@ -455,7 +456,7 @@ export default function RoomPage() {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 p-4 flex">
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 flex"> {/* Removed p-4 from here */}
         {/* Username Modal */}
         <Dialog open={showUsernameModal} onOpenChange={setShowUsernameModal}>
           <DialogContent className="sm:max-w-[425px]">
@@ -596,7 +597,7 @@ export default function RoomPage() {
           </SidebarFooter>
         </Sidebar>
 
-        <div className="flex-1 max-w-6xl mx-auto p-4">
+        <div className="flex-1 max-w-6xl mx-auto py-4 px-4 md:px-6"> {/* Adjusted padding here */}
           {/* Header */}
           <div className="mb-8 text-center">
             <div className="flex items-center justify-center gap-3 mb-4">
@@ -673,7 +674,7 @@ export default function RoomPage() {
                     Share Room
                   </Button>
                   <Button
-                    onClick={() => fetchLatestContent(true)} // Explicit call on button click
+                    onClick={() => fetchLatestContent(true)} // Force refresh on click
                     variant="outline"
                     size="sm"
                     disabled={isFetching}
@@ -688,7 +689,7 @@ export default function RoomPage() {
                         onClick={handleClear}
                         variant="outline"
                         size="sm"
-                        disabled={!text.trim() && !hasUnpublishedChanges}
+                        disabled={isFetching} {/* Changed disabled logic */}\
                         className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
                       >
                         Clear

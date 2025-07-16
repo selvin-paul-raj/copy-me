@@ -97,6 +97,11 @@ export default function HomePage() {
     if (!validateUsername(username)) return
 
     setIsLoading(true)
+    toast({
+      title: "Joining Room...",
+      description: `Attempting to join room ${roomId.trim()}`,
+      duration: 2000,
+    })
     router.push(`/room/${roomId.trim()}?username=${encodeURIComponent(username.trim())}`)
   }
 
