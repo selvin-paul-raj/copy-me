@@ -805,7 +805,7 @@ export default function RoomPage() {
             </Button>
           </SidebarFooter>
         </Sidebar>
-        <SidebarInset className="flex-1 flex flex-col p-4 md:p-6">
+        <SidebarInset className="flex-1 flex flex-col p-2 md:p-4">
           {/* Header */}
           <div className="mb-8 text-center">
             <div className="flex items-center justify-center gap-3 mb-2">
@@ -816,7 +816,7 @@ export default function RoomPage() {
                 )}
               </div>
               <h1 className="text-3xl sm:text-4xl md:text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Copy-ME: Room {roomId}
+                Copy-ME: Room <code>{roomId}</code>
               </h1>
             </div>
             <p className="text-base sm:text-lg text-gray-600 mb-2">
