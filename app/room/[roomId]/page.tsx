@@ -1,12 +1,14 @@
 "use client"
 
+import { SidebarFooter } from "@/components/ui/sidebar"
+
 import { useEffect, useState, useRef, useCallback } from "react"
-import { useParams, useRouter } from "next/navigation" // Removed useSearchParams
+import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Card } from "@/components/ui/card"
-import { Copy, Users, Wifi, WifiOff, Activity, Zap, Upload, RefreshCw, Home, Share2 } from "lucide-react" // Added Share2
-import { useToast } from "@/hooks/use-toast"
+import { Copy, Wifi, WifiOff, Zap, Upload, RefreshCw, Home, Share2, Plus, Trash2, FileText } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -18,161 +20,221 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarGroup,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuButton,
+  SidebarMenuItem,
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar"
+import type { Notebook } from "@/lib/db"
+// Removed getSupabaseClient and RealtimeChannel imports as they are no longer used for real-time features
+// Removed updateUserPresenceAction import
 
-interface User {
-  id: string
-  lastSeen: number
-  isTyping: boolean
-}
+// Removed User interface as user presence is no longer tracked
+// Removed HEARTBEAT_INTERVAL and TYPING_TIMEOUT
 
 export default function RoomPage() {
   const params = useParams()
+  const searchParams = useSearchParams()
   const router = useRouter()
   const roomId = params.roomId as string
-  // roomKey is no longer used or expected from searchParams
 
   const [text, setText] = useState("")
-  const [users, setUsers] = useState<User[]>([])
-  const [isConnected, setIsConnected] = useState(false)
-  const [isTyping, setIsTyping] = useState(false)
+  // Removed users state
+  const [isConnected, setIsConnected] = useState(false) // Keep for general network status
+  // Removed isTyping state
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
   const [isFetching, setIsFetching] = useState(false)
-  const [roomExistsOnServer, setRoomExistsOnServer] = useState(true) // Renamed from isRoomValid
+  const [roomExistsOnServer, setRoomExistsOnServer] = useState(true)
+  const [showUsernameModal, setShowUsernameModal] = useState(false)
+  const [localUsername, setLocalUsername] = useState("")
+  const [notebooks, setNotebooks] = useState<Notebook[]>([])
+  const [activeNotebookId, setActiveNotebookId] = useState<string>("main")
+  const [showAddNotebookModal, setShowAddNotebookModal] = useState(false)
+  const [newNotebookName, setNewNotebookName] = useState("")
+  const [showDeleteNotebookConfirm, setShowDeleteNotebookConfirm] = useState(false)
+  const [notebookToDelete, setNotebookToDelete] = useState<Notebook | null>(null)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const userIdRef = useRef<string>("")
-  const typingTimeoutRef = useRef<NodeJS.Timeout>()
+  const userIdRef = useRef<string>("") // Still useful for unique client ID, even if not for presence
+  // Removed typingTimeoutRef
   const lastKnownServerTextRef = useRef("")
+  const lastPublishedTextRef = useRef("") // To track text last published by THIS client
+  const currentUsernameRef = useRef<string>("")
+  // Removed presenceChannelRef and dbChannelRef
 
-  const { toast } = useToast()
+  // Removed supabase client initialization as Realtime is no longer used
 
-  // Generate unique user ID on component mount
+  // Generate unique user ID and handle username on component mount
   useEffect(() => {
     userIdRef.current = `user_${Math.random().toString(36).substr(2, 9)}_${Date.now()}`
-    fetchLatestContent() // Initial fetch
-  }, []) // No dependency on roomKey anymore
 
-  // Send heartbeat to keep user active and update typing status
-  const sendHeartbeat = useCallback(async () => {
-    if (!roomExistsOnServer) return // Only send heartbeat if room is known to exist
-    try {
-      await fetch(`/api/room/${roomId}/heartbeat`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: userIdRef.current,
-          isTyping: isTyping,
-          // roomKey removed from heartbeat
-        }),
-      })
-    } catch (error) {
-      console.error("Heartbeat failed:", error)
+    const urlUsername = searchParams.get("username")
+    const storedUsername = localStorage.getItem("copy-me-username")
+
+    if (urlUsername) {
+      currentUsernameRef.current = decodeURIComponent(urlUsername)
+      localStorage.setItem("copy-me-username", currentUsernameRef.current)
+    } else if (storedUsername) {
+      currentUsernameRef.current = storedUsername
+    } else {
+      setShowUsernameModal(true)
     }
-  }, [isTyping, roomId, roomExistsOnServer])
 
-  // Fetch latest content and user list from server
-  const fetchLatestContent = useCallback(async () => {
-    setIsFetching(true)
-    try {
-      // No roomKey in URL anymore
-      const response = await fetch(`/api/room/${roomId}?userId=${userIdRef.current}`)
-      if (response.ok) {
-        const data = await response.json()
-        const serverContent = data.content || ""
+    if (currentUsernameRef.current) {
+      // This is the ONLY automatic call to fetchLatestContent on initial load.
+      // It runs once when the component mounts and username is available.
+      fetchLatestContent(true)
+    }
+  }, [searchParams]) // Dependencies are stable, preventing re-runs after initial load.
 
-        if (!hasUnpublishedChanges && serverContent !== lastKnownServerTextRef.current) {
-          setText(serverContent)
-        }
-        lastKnownServerTextRef.current = serverContent
+  // Update active notebook content when activeNotebookId changes
+  useEffect(() => {
+    const activeNb = notebooks.find((nb) => nb.id === activeNotebookId)
+    if (activeNb) {
+      setText(activeNb.content)
+      lastKnownServerTextRef.current = activeNb.content
+      lastPublishedTextRef.current = activeNb.content // Assume initial content is published
+      setHasUnpublishedChanges(false)
+    }
+  }, [activeNotebookId, notebooks])
 
-        setUsers(data.users || [])
-        setIsConnected(true)
-        setRoomExistsOnServer(true) // Confirm room exists
-      } else if (response.status === 404) {
-        // Only check for 404 now
-        setRoomExistsOnServer(false)
-        setIsConnected(false)
-        toast({
-          title: "Room Not Found",
-          description: "This room does not exist. Please check the ID or create a new one.",
-          variant: "destructive",
-          duration: 5000,
-        })
-      } else {
-        setIsConnected(false)
-        toast({
-          title: "⚠️ Connection Issue",
-          description: "Could not fetch latest content. Please check your connection.",
-          variant: "destructive",
-          duration: 3000,
-        })
-      }
-    } catch (error) {
-      setIsConnected(false)
-      console.error("Fetch error:", error)
+  const handleUsernameSubmit = () => {
+    const trimmedUsername = localUsername.trim()
+    if (trimmedUsername.length < 2 || trimmedUsername.length > 20) {
       toast({
-        title: "⚠️ Network Error",
-        description: "Failed to connect to the server. Please check your internet.",
+        title: "Invalid Username",
+        description: "Username must be between 2 and 20 characters.",
         variant: "destructive",
         duration: 3000,
       })
-    } finally {
-      setIsFetching(false)
+      return
     }
-  }, [hasUnpublishedChanges, roomId, toast])
+    setLocalUsername(trimmedUsername)
+    currentUsernameRef.current = trimmedUsername
+    localStorage.setItem("copy-me-username", trimmedUsername)
+    setShowUsernameModal(false)
+    fetchLatestContent(true) // Force fetch after username is set
+  }
 
-  // Setup periodic heartbeats (polling for user activity, not content)
-  useEffect(() => {
-    if (!roomExistsOnServer) return
-    const heartbeatInterval = setInterval(sendHeartbeat, 2000)
+  // Removed Supabase Realtime Setup useEffect
 
-    return () => {
-      if (heartbeatInterval) {
-        clearInterval(heartbeatInterval)
+  // Removed useEffect for updating presence with typing status
+
+  // Fetch latest content from server (initial load and manual refresh)
+  const fetchLatestContent = useCallback(
+    async (forceUpdate = false) => {
+      if (!currentUsernameRef.current) return
+
+      setIsFetching(true)
+      try {
+        const response = await fetch(`/api/room/${roomId}`)
+        if (response.status === 429) {
+          toast({
+            title: "Rate Limit Hit",
+            description: "Slowing down updates due to high traffic. Please wait.",
+            variant: "destructive",
+            duration: 2000,
+          })
+          setIsConnected(false)
+        } else if (response.ok) {
+          const data = await response.json()
+          setNotebooks(data.notebooks || [])
+          const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
+          const serverContent = currentNb ? currentNb.content : ""
+
+          // Always update local text with server content on refresh
+          setText(serverContent) // This updates the 'text' state.
+          lastKnownServerTextRef.current = serverContent
+          if (serverContent === lastPublishedTextRef.current) {
+            setHasUnpublishedChanges(false)
+          }
+
+          setIsConnected(true) // Indicate general network connection
+          setRoomExistsOnServer(true)
+        } else if (response.status === 404) {
+          setRoomExistsOnServer(false)
+          setIsConnected(false)
+          toast({
+            title: "Room Not Found",
+            description: "This room does not exist or has expired. Please check the ID or create a new one.",
+            variant: "destructive",
+            duration: 5000,
+          })
+        } else {
+          setIsConnected(false)
+          toast({
+            title: "⚠️ Connection Issue",
+            description: "Could not fetch latest content. Please check your connection.",
+            variant: "destructive",
+            duration: 3000,
+          })
+        }
+      } catch (error) {
+        setIsConnected(false)
+        console.error("Fetch error:", error)
+        toast({
+          title: "⚠️ Network Error",
+          description: "Failed to connect to the server. Please check your internet.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      } finally {
+        setIsFetching(false)
       }
-    }
-  }, [sendHeartbeat, roomExistsOnServer])
-
-  // Handle local text changes in the textarea
-  const handleTextChange = useCallback(
-    (value: string) => {
-      setText(value)
-      setHasUnpublishedChanges(true)
-      setIsTyping(true)
-
-      if (typingTimeoutRef.current) {
-        clearTimeout(typingTimeoutRef.current)
-      }
-
-      typingTimeoutRef.current = setTimeout(() => {
-        setIsTyping(false)
-        sendHeartbeat()
-      }, 1500)
     },
-    [sendHeartbeat],
+    [roomId, toast, activeNotebookId], // Dependencies for useCallback. 'text' is not a dependency here because it's only set, not read to influence the function's logic.
   )
 
-  // Function to publish text to the server
+  const handleTextChange = useCallback((value: string) => {
+    setText(value)
+    setHasUnpublishedChanges(true)
+    // No network calls or typing indicators triggered here.
+  }, [])
+
   const handlePublish = useCallback(async () => {
-    if (!roomExistsOnServer) return
+    if (!roomExistsOnServer || !currentUsernameRef.current) return
     try {
       const response = await fetch(`/api/room/${roomId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           content: text,
-          userId: userIdRef.current,
-          timestamp: Date.now(),
-          isTyping: false,
-          // roomKey removed from publish
+          notebookId: activeNotebookId,
         }),
       })
 
-      if (response.ok) {
+      if (response.status === 429) {
+        toast({
+          title: "Rate Limit Hit",
+          description: "Publish failed due to high traffic. Please try again shortly.",
+          variant: "destructive",
+          duration: 3000,
+        })
+        setIsConnected(false)
+      } else if (response.ok) {
         const data = await response.json()
-        setText(data.content)
-        lastKnownServerTextRef.current = data.content
+        setNotebooks(data.notebooks)
+        const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
+        setText(currentNb ? currentNb.content : "")
+        lastKnownServerTextRef.current = currentNb ? currentNb.content : ""
+        lastPublishedTextRef.current = currentNb ? currentNb.content : ""
         setHasUnpublishedChanges(false)
         setIsConnected(true)
         toast({
@@ -181,12 +243,11 @@ export default function RoomPage() {
           duration: 2000,
         })
       } else if (response.status === 404) {
-        // Only check for 404 now
         setRoomExistsOnServer(false)
         setIsConnected(false)
         toast({
           title: "Room Not Found",
-          description: "This room does not exist. Please check the ID or create a new one.",
+          description: "This room does not exist or has expired. Please check the ID or create a new one.",
           variant: "destructive",
           duration: 5000,
         })
@@ -209,7 +270,7 @@ export default function RoomPage() {
         duration: 3000,
       })
     }
-  }, [text, roomId, roomExistsOnServer, toast])
+  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId]) // 'text' is a dependency here because its value is read for the POST request body.
 
   const copyToClipboard = async () => {
     try {
@@ -234,7 +295,7 @@ export default function RoomPage() {
 
   const copyRoomLinkToClipboard = async () => {
     try {
-      const roomLink = window.location.href
+      const roomLink = window.location.origin + `/room/${roomId}`
       await navigator.clipboard.writeText(roomLink)
       toast({
         title: "🔗 Link Copied!",
@@ -252,7 +313,6 @@ export default function RoomPage() {
     }
   }
 
-  // Combined clear function
   const handleClear = () => {
     if (hasUnpublishedChanges) {
       setText("")
@@ -267,21 +327,119 @@ export default function RoomPage() {
     }
   }
 
-  // Function to confirm and clear all (publish empty content)
   const confirmClearAll = useCallback(async () => {
     setText("")
     setHasUnpublishedChanges(true)
     setShowClearAllConfirm(false)
-    await handlePublish()
+    await handlePublish() // Publish empty content to clear for everyone
     toast({
-      title: "🗑️ Cleared for All",
+      title: "🗑️️ Cleared for All",
       description: "The text has been cleared for all connected users.",
       duration: 2500,
     })
   }, [handlePublish])
 
-  const activeUsers = users.filter((user) => Date.now() - user.lastSeen < 10000)
-  const typingUsers = activeUsers.filter((user) => user.isTyping && user.id !== userIdRef.current)
+  const handleAddNotebook = async () => {
+    if (!newNotebookName.trim()) {
+      toast({
+        title: "Missing Name",
+        description: "Please enter a name for the new notebook.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+    if (notebooks.some((nb) => nb.name === newNotebookName.trim())) {
+      toast({
+        title: "Name Exists",
+        description: "A notebook with this name already exists.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return
+    }
+
+    try {
+      const response = await fetch(`/api/room/${roomId}/add-notebook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notebookName: newNotebookName.trim() }),
+      })
+
+      if (response.ok) {
+        await fetchLatestContent(true) // Refresh notebooks after adding
+        setNewNotebookName("")
+        setShowAddNotebookModal(false)
+        toast({
+          title: "Notebook Added!",
+          description: `Notebook "${newNotebookName.trim()}" created.`,
+          duration: 2000,
+        })
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Failed to Add Notebook",
+          description: errorData.error || "Could not add notebook. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      }
+    } catch (error) {
+      console.error("Error adding notebook:", error)
+      toast({
+        title: "Network Error",
+        description: "Failed to connect to the server to add notebook.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    }
+  }
+
+  const handleDeleteNotebook = (notebook: Notebook) => {
+    setNotebookToDelete(notebook)
+    setShowDeleteNotebookConfirm(true)
+  }
+
+  const confirmDeleteNotebook = async () => {
+    if (!notebookToDelete) return
+
+    try {
+      const response = await fetch(`/api/room/${roomId}/delete-notebook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ notebookId: notebookToDelete.id }),
+      })
+
+      if (response.ok) {
+        await fetchLatestContent(true) // Refresh notebooks after deleting
+        setNotebookToDelete(null)
+        setShowDeleteNotebookConfirm(false)
+        toast({
+          title: "Notebook Deleted!",
+          description: `Notebook "${notebookToDelete.name}" has been deleted.`,
+          duration: 2000,
+        })
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Failed to Delete Notebook",
+          description: errorData.error || "Could not delete notebook. Please try again.",
+          variant: "destructive",
+          duration: 3000,
+        })
+      }
+    } catch (error) {
+      console.error("Error deleting notebook:", error)
+      toast({
+        title: "Network Error",
+        description: "Failed to connect to the server to delete notebook.",
+        variant: "destructive",
+        duration: 3000,
+      })
+    }
+  }
+
+  // Removed useEffect for periodic presence update
 
   if (!roomExistsOnServer) {
     return (
@@ -296,228 +454,357 @@ export default function RoomPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 p-4">
-      <div className="max-w-6xl mx-auto">
-        {/* Header */}
-        <div className="mb-8 text-center">
-          <div className="flex items-center justify-center gap-3 mb-4">
-            <div className="relative">
-              <Zap className="w-8 h-8 text-blue-600" />
-              {isConnected && (
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
-              )}
-            </div>
-            <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-              Copy-ME: Room {roomId}
-            </h1>
-          </div>
-          <p className="text-lg text-gray-600 mb-6">
-            Real-time collaborative text editor • Type anywhere, publish to sync everywhere
-          </p>
-
-          {/* Dynamic Status Bar */}
-          <div className="flex flex-wrap items-center justify-center gap-4 text-sm sm:gap-6">
-            <div
-              className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${
-                isConnected
-                  ? "bg-green-100 text-green-700 shadow-green-200 shadow-lg"
-                  : "bg-red-100 text-red-700 shadow-red-200 shadow-lg"
-              }`}
-            >
-              {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-              <span className="font-medium">{isConnected ? "Live Connected" : "Disconnected"}</span>
-            </div>
-            <div className="flex items-center gap-2 px-4 py-2 bg-blue-100 text-blue-700 rounded-full shadow-blue-200 shadow-lg">
-              <Users className="w-4 h-4" />
-              <span className="font-medium">{activeUsers.length} Online</span>
-            </div>
-            {typingUsers.length > 0 && (
-              <div className="flex items-center gap-2 px-4 py-2 bg-orange-100 text-orange-700 rounded-full shadow-orange-200 shadow-lg animate-pulse">
-                <Activity className="w-4 h-4" />
-                <span className="font-medium">{typingUsers.length} typing...</span>
+    <SidebarProvider>
+      <div className="min-h-screen bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 p-4 flex">
+        {/* Username Modal */}
+        <Dialog open={showUsernameModal} onOpenChange={setShowUsernameModal}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Enter Your Username</DialogTitle>
+              <DialogDescription>Please enter a username to identify yourself in this room.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="modal-username" className="text-right">
+                  Username
+                </Label>
+                <Input
+                  id="modal-username"
+                  value={localUsername}
+                  onChange={(e) => setLocalUsername(e.target.value)}
+                  className="col-span-3"
+                  placeholder="e.g., AnonymousUser"
+                  maxLength={20}
+                  minLength={2}
+                />
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+            <DialogFooter>
+              <Button
+                onClick={handleUsernameSubmit}
+                disabled={localUsername.trim().length < 2 || localUsername.trim().length > 20}
+              >
+                Continue
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-        {/* Main Editor Card */}
-        <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden">
-          <div className="p-6">
-            {/* Toolbar */}
-            <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center gap-2">
-                  <div
-                    className={`w-3 h-3 rounded-full transition-colors duration-300 ${
-                      isConnected ? "bg-green-400 animate-pulse" : "bg-gray-400"
-                    }`}
-                  ></div>
-                  <span className="text-sm font-medium text-gray-700">Shared Workspace</span>
-                </div>
+        {/* Add Notebook Modal */}
+        <Dialog open={showAddNotebookModal} onOpenChange={setShowAddNotebookModal}>
+          <DialogContent className="sm:max-w-[425px]">
+            <DialogHeader>
+              <DialogTitle>Add New Notebook</DialogTitle>
+              <DialogDescription>Enter a name for your new notebook.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="new-notebook-name" className="text-right">
+                  Name
+                </Label>
+                <Input
+                  id="new-notebook-name"
+                  value={newNotebookName}
+                  onChange={(e) => setNewNotebookName(e.target.value)}
+                  className="col-span-3"
+                  placeholder="e.g., Meeting Notes"
+                  maxLength={50}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowAddNotebookModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleAddNotebook}
+                disabled={!newNotebookName.trim() || notebooks.some((nb) => nb.name === newNotebookName.trim())}
+              >
+                Create Notebook
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-                {/* Unpublished Changes Indicator */}
-                {hasUnpublishedChanges && (
-                  <div className="flex items-center gap-1 text-xs text-orange-600 animate-fade-in">
-                    <div className="w-2 h-2 bg-orange-400 rounded-full animate-ping"></div>
-                    <span>Unpublished changes</span>
-                  </div>
+        {/* Delete Notebook Confirmation */}
+        <AlertDialog open={showDeleteNotebookConfirm} onOpenChange={setShowDeleteNotebookConfirm}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Delete Notebook "{notebookToDelete?.name}"?</AlertDialogTitle>
+              <AlertDialogDescription>
+                This action cannot be undone. All content in this notebook will be permanently deleted.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel onClick={() => setNotebookToDelete(null)}>Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={confirmDeleteNotebook}
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              >
+                Delete
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
+        <Sidebar className="bg-white/90 backdrop-blur-sm border-r border-gray-200 shadow-lg">
+          <SidebarHeader>
+            <div className="flex items-center justify-between">
+              <h2 className="text-xl font-bold text-gray-800">Notebooks</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowAddNotebookModal(true)}>
+                <Plus />
+                <span className="sr-only">Add Notebook</span>
+              </Button>
+            </div>
+          </SidebarHeader>
+          <SidebarContent>
+            <SidebarGroup>
+              <SidebarMenu>
+                {notebooks.map((notebook) => (
+                  <SidebarMenuItem key={notebook.id}>
+                    <SidebarMenuButton
+                      isActive={activeNotebookId === notebook.id}
+                      onClick={() => setActiveNotebookId(notebook.id)}
+                      className="justify-between"
+                    >
+                      <span className="flex items-center gap-2">
+                        <FileText className="w-4 h-4" />
+                        {notebook.name}
+                      </span>
+                      {notebooks.length > 1 && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 text-gray-500 hover:text-red-500"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            handleDeleteNotebook(notebook)
+                          }}
+                        >
+                          <Trash2 className="w-4 h-4" />
+                          <span className="sr-only">Delete notebook</span>
+                        </Button>
+                      )}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroup>
+          </SidebarContent>
+          <SidebarFooter>
+            <SidebarTrigger />
+          </SidebarFooter>
+        </Sidebar>
+
+        <div className="flex-1 max-w-6xl mx-auto p-4">
+          {/* Header */}
+          <div className="mb-8 text-center">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <div className="relative">
+                <Zap className="w-8 h-8 text-blue-600" />
+                {isConnected && (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                 )}
               </div>
-              <div className="flex flex-wrap gap-2">
-                <Button
-                  onClick={() => router.push("/")}
-                  variant="outline"
-                  size="sm"
-                  className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
-                >
-                  <Home />
-                  Home
-                </Button>
-                <Button
-                  onClick={copyRoomLinkToClipboard} // New Share button
-                  variant="outline"
-                  size="sm"
-                  className="hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-colors bg-transparent"
-                >
-                  <Share2 />
-                  Share Room
-                </Button>
-                <Button
-                  onClick={fetchLatestContent}
-                  variant="outline"
-                  size="sm"
-                  disabled={isFetching}
-                  className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors bg-transparent"
-                >
-                  <RefreshCw className={isFetching ? "animate-spin" : ""} />
-                  Refresh
-                </Button>
-                <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      onClick={handleClear}
-                      variant="outline"
-                      size="sm"
-                      disabled={!text.trim() && !hasUnpublishedChanges}
-                      className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
-                    >
-                      Clear
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This action will clear the text for ALL connected users in this room. This cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction onClick={confirmClearAll}>Clear for Everyone</AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-                <Button
-                  onClick={copyToClipboard}
-                  size="sm"
-                  disabled={!text.trim()}
-                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
-                >
-                  <Copy className="w-4 h-4" />
-                  Copy All
-                </Button>
-                <Button
-                  onClick={handlePublish}
-                  size="sm"
-                  disabled={!hasUnpublishedChanges}
-                  className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
-                >
-                  <Upload className="w-4 h-4" />
-                  Publish
-                </Button>
-              </div>
+              <h1 className="text-5xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
+                Copy-ME: Room {roomId}
+              </h1>
             </div>
+            <p className="text-lg text-gray-600 mb-6">
+              Collaborative text editor • Type anywhere, publish to sync everywhere
+            </p>
 
-            {/* Text Editor */}
-            <div className="relative">
-              <Textarea
-                ref={textareaRef}
-                value={text}
-                onChange={(e) => handleTextChange(e.target.value)}
-                placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
+            {/* Dynamic Status Bar (Simplified) */}
+            <div className="flex flex-wrap items-center justify-center gap-4 text-sm sm:gap-6">
+              <div
+                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${
+                  isConnected
+                    ? "bg-green-100 text-green-700 shadow-green-200 shadow-lg"
+                    : "bg-red-100 text-red-700 shadow-red-200 shadow-lg"
+                }`}
+              >
+                {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+                <span className="font-medium">{isConnected ? "Connected" : "Disconnected"}</span>
+              </div>
+              {/* Removed Online Users and Typing Indicators */}
+            </div>
+          </div>
+
+          {/* Main Editor Card */}
+          <Card className="shadow-2xl bg-white/90 backdrop-blur-sm border-0 overflow-hidden">
+            <div className="p-6">
+              {/* Toolbar */}
+              <div className="flex flex-wrap gap-3 justify-between items-center mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    <div
+                      className={`w-3 h-3 rounded-full transition-colors duration-300 ${
+                        isConnected ? "bg-green-400 animate-pulse" : "bg-gray-400"
+                      }`}
+                    ></div>
+                    <span className="text-sm font-medium text-gray-700">Shared Workspace</span>
+                  </div>
+
+                  {/* Unpublished Changes Indicator */}
+                  {hasUnpublishedChanges && (
+                    <div className="flex items-center gap-1 text-xs text-orange-600 animate-fade-in">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-ping"></div>
+                      <span>Unpublished changes</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    onClick={() => router.push("/")}
+                    variant="outline"
+                    size="sm"
+                    className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
+                  >
+                    <Home />
+                    Home
+                  </Button>
+                  <Button
+                    onClick={copyRoomLinkToClipboard}
+                    variant="outline"
+                    size="sm"
+                    className="hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-colors bg-transparent"
+                  >
+                    <Share2 />
+                    Share Room
+                  </Button>
+                  <Button
+                    onClick={() => fetchLatestContent(true)} // Explicit call on button click
+                    variant="outline"
+                    size="sm"
+                    disabled={isFetching}
+                    className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors bg-transparent"
+                  >
+                    <RefreshCw className={isFetching ? "animate-spin" : ""} />
+                    Refresh
+                  </Button>
+                  <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        onClick={handleClear}
+                        variant="outline"
+                        size="sm"
+                        disabled={!text.trim() && !hasUnpublishedChanges}
+                        className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
+                      >
+                        Clear
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          This action will clear the text for ALL connected users in this room. This cannot be undone.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={confirmClearAll}>Clear for Everyone</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                  <Button
+                    onClick={copyToClipboard}
+                    size="sm"
+                    disabled={!text.trim()}
+                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                  >
+                    <Copy className="w-4 h-4" />
+                    Copy All
+                  </Button>
+                  <Button
+                    onClick={handlePublish}
+                    size="sm"
+                    disabled={!hasUnpublishedChanges}
+                    className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
+                  >
+                    <Upload className="w-4 h-4" />
+                    Publish
+                  </Button>
+                </div>
+              </div>
+
+              {/* Text Editor */}
+              <div className="relative">
+                <Textarea
+                  ref={textareaRef}
+                  value={text}
+                  onChange={(e) => handleTextChange(e.target.value)}
+                  placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
 
 ✨ Perfect for:
 • Drafting content before sharing
 • Quick text sharing between devices
-• Real-time collaboration (after publishing)
+• Collaborative text editing (after publishing)
 • Code snippet sharing  
-• Live note-taking
+• Note-taking
 
 Hit 'Publish' to sync your content with everyone connected!"
-                className="min-h-[50vh] md:min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
-                aria-label="Shared text area for real-time collaboration"
-              />
+                  className="min-h-[50vh] md:min-h-[600px] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50"
+                  aria-label="Shared text area for real-time collaboration"
+                  disabled={!currentUsernameRef.current}
+                />
 
-              {/* Typing Indicator Overlay */}
-              {typingUsers.length > 0 && (
-                <div className="absolute bottom-4 right-4 bg-orange-100 text-orange-700 px-3 py-1 rounded-full text-xs font-medium animate-bounce">
-                  {typingUsers.length === 1 ? "Someone is typing..." : `${typingUsers.length} people typing...`}
+                {/* Removed Typing Indicator Overlay */}
+              </div>
+
+              {/* Dynamic Stats Bar */}
+              <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
+                  <span className="font-medium">{text.length.toLocaleString()} characters</span>
+                  <span>•</span>
+                  <span>{text.split("\n").length.toLocaleString()} lines</span>
+                  <span>•</span>
+                  <span>
+                    {text
+                      .split(/\s+/)
+                      .filter((w) => w.length > 0)
+                      .length.toLocaleString()}{" "}
+                    words
+                  </span>
                 </div>
-              )}
-            </div>
-
-            {/* Dynamic Stats Bar */}
-            <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
-              <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
-                <span className="font-medium">{text.length.toLocaleString()} characters</span>
-                <span>•</span>
-                <span>{text.split("\n").length.toLocaleString()} lines</span>
-                <span>•</span>
-                <span>
-                  {text
-                    .split(/\s+/)
-                    .filter((w) => w.length > 0)
-                    .length.toLocaleString()}{" "}
-                  words
-                </span>
+                <div className="flex items-center gap-2">
+                  {isConnected ? (
+                    <>
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-green-600 font-medium">Connected</span>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                      <span className="text-gray-600 font-medium">Disconnected</span>
+                    </>
+                  )}
+                </div>
               </div>
+            </div>
+          </Card>
+
+          {/* Footer Info */}
+          <div className="mt-8 text-center">
+            <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
               <div className="flex items-center gap-2">
-                {isFetching ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-                    <span className="text-blue-600 font-medium">Refreshing...</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                    <span className="text-green-600 font-medium">Ready for refresh</span>
-                  </>
-                )}
+                <span>🔒</span>
+                <span>No registration required</span>
               </div>
-            </div>
-          </div>
-        </Card>
-
-        {/* Footer Info */}
-        <div className="mt-8 text-center">
-          <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
-            <div className="flex items-center gap-2">
-              <span>🔒</span>
-              <span>No registration required</span>
-            </div>
-            <span>•</span>
-            <div className="flex items-center gap-2">
-              <span>💾</span>
-              <span>Data ephemeral per room</span>
-            </div>
-            <span>•</span>
-            <div className="flex items-center gap-2">
-              <span>⚡</span>
-              <span>Manual synchronization via Publish</span>
+              <span>•</span>
+              <div className="flex items-center gap-2">
+                <span>💾</span>
+                <span>Data ephemeral per room</span>
+              </div>
+              <span>•</span>
+              <div className="flex items-center gap-2">
+                <span>⚡</span>
+                <span>Manual synchronization via Publish</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </SidebarProvider>
   )
 }

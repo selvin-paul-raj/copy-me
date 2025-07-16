@@ -1,42 +1,34 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getRoom, setRoom, cleanupUsers } from "@/lib/in-memory-store"
+import { getRoomFromDb, updateRoomContentInDb } from "@/lib/db"
 
 export async function GET(request: NextRequest, { params }: { params: { roomId: string } }) {
   const roomId = params.roomId
-  const { searchParams } = new URL(request.url)
-  const userId = searchParams.get("userId") || ""
 
   try {
-    const roomData = getRoom(roomId)
+    const { room, error } = await getRoomFromDb(roomId) // getRoomFromDb already updates last_active
 
-    if (!roomData) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 })
-    }
-
-    // roomKey validation removed as per user request
-
-    // Update user's last seen timestamp
-    if (userId) {
-      roomData.users[userId] = {
-        id: userId,
-        lastSeen: Date.now(),
-        isTyping: roomData.users[userId]?.isTyping || false, // Preserve typing status
+    if (error || !room) {
+      if (error?.includes("Too many requests")) {
+        return NextResponse.json({ error: "Too many requests. Please try again shortly." }, { status: 429 })
       }
-      setRoom(roomId, roomData) // Save updated user state back to in-memory store
+      return NextResponse.json({ error: error || "Room not found" }, { status: 404 })
     }
-
-    // Perform cleanup before sending response
-    const cleanedUsers = cleanupUsers(roomData.users)
 
     return NextResponse.json({
-      content: roomData.content,
-      timestamp: roomData.lastUpdate,
-      userCount: Object.keys(cleanedUsers).length,
-      users: Object.values(cleanedUsers),
+      notebooks: room.notebooks,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error fetching room ${roomId}:`, error)
-    return NextResponse.json({ error: "Failed to fetch room data" }, { status: 500 })
+    let errorMessage = "Failed to fetch room data."
+    let statusCode = 500
+
+    if (error instanceof SyntaxError && error.message.includes("Unexpected token 'T', \"Too Many R\"")) {
+      errorMessage = "Too many requests. Supabase rate limit hit."
+      statusCode = 429
+    } else if (error.message) {
+      errorMessage = `An unexpected error occurred: ${error.message}`
+    }
+    return NextResponse.json({ error: errorMessage }, { status: statusCode })
   }
 }
 
@@ -44,45 +36,37 @@ export async function POST(request: NextRequest, { params }: { params: { roomId:
   const roomId = params.roomId
   try {
     const body = await request.json()
-    const { content, userId, timestamp, isTyping } = body // roomKey removed from body
+    const { content, notebookId } = body // Only expect content and notebookId
 
-    const roomData = getRoom(roomId)
-
-    if (!roomData) {
-      return NextResponse.json({ error: "Room not found" }, { status: 404 })
+    if (!notebookId) {
+      return NextResponse.json({ error: "Notebook ID is required." }, { status: 400 })
     }
 
-    // roomKey validation removed as per user request
+    const { room, error } = await updateRoomContentInDb(roomId, notebookId, content) // Call with new signature
 
-    // Only update room content if 'content' is explicitly provided
-    if (content !== undefined) {
-      roomData.content = content
-      roomData.lastUpdate = timestamp || Date.now()
-    }
-
-    // Always update user activity and typing status
-    if (userId) {
-      roomData.users[userId] = {
-        id: userId,
-        lastSeen: Date.now(),
-        isTyping: isTyping || false,
+    if (error || !room) {
+      if (error?.includes("Too many requests")) {
+        return NextResponse.json({ error: "Too many requests. Please try again shortly." }, { status: 429 })
       }
+      return NextResponse.json({ error: error || "Failed to update room data" }, { status: 500 })
     }
-
-    setRoom(roomId, roomData) // Save updated room data back to in-memory store
-
-    // Perform cleanup after updating state
-    const cleanedUsers = cleanupUsers(roomData.users)
 
     return NextResponse.json({
       success: true,
-      content: roomData.content, // Return the confirmed content
-      timestamp: roomData.lastUpdate,
-      userCount: Object.keys(cleanedUsers).length,
-      users: Object.values(cleanedUsers),
+      notebooks: room.notebooks,
+      timestamp: room.last_active,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error(`Error updating room ${roomId}:`, error)
-    return NextResponse.json({ error: "Failed to update room data" }, { status: 500 })
+    let errorMessage = "Failed to update room data."
+    let statusCode = 500
+
+    if (error instanceof SyntaxError && error.message.includes("Unexpected token 'T', \"Too Many R\"")) {
+      errorMessage = "Too many requests. Supabase rate limit hit."
+      statusCode = 429
+    } else if (error.message) {
+      errorMessage = `An unexpected error occurred: ${error.message}`
+    }
+    return NextResponse.json({ error: errorMessage }, { status: statusCode })
   }
 }

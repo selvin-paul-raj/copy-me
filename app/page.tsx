@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,16 +11,47 @@ import { PlusCircle, LogIn } from "lucide-react"
 
 export default function HomePage() {
   const [roomId, setRoomId] = useState("")
+  const [username, setUsername] = useState("")
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
+  // Load username from local storage on mount
+  useEffect(() => {
+    const storedUsername = localStorage.getItem("copy-me-username")
+    if (storedUsername) {
+      setUsername(storedUsername)
+    }
+  }, [])
+
+  // Save username to local storage whenever it changes
+  useEffect(() => {
+    localStorage.setItem("copy-me-username", username)
+  }, [username])
+
+  const validateUsername = (name: string) => {
+    const trimmedName = name.trim()
+    if (trimmedName.length < 2 || trimmedName.length > 20) {
+      toast({
+        title: "Invalid Username",
+        description: "Username must be between 2 and 20 characters.",
+        variant: "destructive",
+        duration: 3000,
+      })
+      return false
+    }
+    return true
+  }
+
   const handleCreateRoom = async () => {
+    if (!validateUsername(username)) return
+
     setIsLoading(true)
     try {
       const response = await fetch("/api/create-room", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username: username.trim() }),
       })
 
       if (response.ok) {
@@ -30,12 +61,12 @@ export default function HomePage() {
           description: "Redirecting to your new room...",
           duration: 2000,
         })
-        // No roomKey in URL anymore
-        router.push(`/room/${data.roomId}`)
+        router.push(`/room/${data.roomId}?username=${encodeURIComponent(username.trim())}`)
       } else {
+        const errorData = await response.json()
         toast({
           title: "❌ Creation Failed",
-          description: "Could not create a new room. Please try again.",
+          description: errorData.error || "Could not create a new room. Please try again.",
           variant: "destructive",
           duration: 3000,
         })
@@ -63,9 +94,10 @@ export default function HomePage() {
       })
       return
     }
+    if (!validateUsername(username)) return
+
     setIsLoading(true)
-    // No roomKey in URL anymore
-    router.push(`/room/${roomId.trim()}`)
+    router.push(`/room/${roomId.trim()}?username=${encodeURIComponent(username.trim())}`)
   }
 
   return (
@@ -83,11 +115,24 @@ export default function HomePage() {
             <CardTitle className="text-center text-2xl">Create or Join a Room</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="username">Your Username</Label>
+              <Input
+                id="username"
+                placeholder="Enter your username (e.g., JohnDoe)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                disabled={isLoading}
+                maxLength={20}
+                minLength={2}
+              />
+            </div>
+
             <div className="space-y-4">
               <Button
                 onClick={handleCreateRoom}
                 className="w-full flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
-                disabled={isLoading}
+                disabled={isLoading || !username.trim()}
               >
                 <PlusCircle className="w-5 h-5" />
                 {isLoading ? "Creating Room..." : "Create New Room"}
@@ -105,17 +150,17 @@ export default function HomePage() {
                 <Label htmlFor="roomId">Room ID</Label>
                 <Input
                   id="roomId"
-                  placeholder="Enter Room ID"
+                  placeholder="Enter Room ID (e.g., ABCD)"
                   value={roomId}
                   onChange={(e) => setRoomId(e.target.value)}
                   disabled={isLoading}
+                  maxLength={4}
                 />
               </div>
-              {/* Room Key input removed */}
               <Button
                 onClick={handleJoinRoom}
                 className="w-full flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
-                disabled={isLoading}
+                disabled={isLoading || !username.trim() || !roomId.trim()}
               >
                 <LogIn className="w-5 h-5" />
                 {isLoading ? "Joining Room..." : "Join Existing Room"}
@@ -134,7 +179,7 @@ export default function HomePage() {
             <span>•</span>
             <div className="flex items-center gap-2">
               <span>💾</span>
-              <span>No permanent storage (data is ephemeral per room)</span>
+              <span>Data ephemeral per room</span>
             </div>
             <span>•</span>
             <div className="flex items-center gap-2">

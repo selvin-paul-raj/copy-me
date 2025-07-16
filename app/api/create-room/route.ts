@@ -1,26 +1,22 @@
 import { NextResponse } from "next/server"
-import { generateShortId, setRoom, roomExists, type RoomData } from "@/lib/in-memory-store"
+import { createRoomInDb } from "@/lib/db"
 
-export async function POST() {
+export async function POST(request: Request) {
   try {
-    let roomId = generateShortId(8)
-    // Check if room exists using the in-memory store function
-    while (roomExists(roomId)) {
-      roomId = generateShortId(8)
+    const body = await request.json()
+    const { username } = body
+
+    if (!username || typeof username !== "string" || username.trim().length < 2 || username.trim().length > 20) {
+      return NextResponse.json({ error: "Invalid username. Must be 2-20 characters." }, { status: 400 })
     }
 
-    // roomKey is no longer generated or stored for room access
-    const initialRoomData: RoomData = {
-      content: "",
-      lastUpdate: Date.now(),
-      users: {},
+    const { roomId, error } = await createRoomInDb()
+
+    if (error) {
+      return NextResponse.json({ error }, { status: 500 })
     }
 
-    // Store the initial room data in the in-memory store
-    setRoom(roomId, initialRoomData)
-
-    // Return only roomId, as roomKey is no longer used for access
-    return NextResponse.json({ roomId }, { status: 200 })
+    return NextResponse.json({ roomId, username: username.trim() }, { status: 200 })
   } catch (error) {
     console.error("Error creating room:", error)
     return NextResponse.json({ error: "Failed to create room" }, { status: 500 })

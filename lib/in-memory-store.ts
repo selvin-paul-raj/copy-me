@@ -6,8 +6,7 @@
 export interface RoomData {
   content: string
   lastUpdate: number
-  // roomKey is removed as per user request for simpler sharing
-  users: Record<string, { id: string; lastSeen: number; isTyping: boolean }>
+  users: Record<string, { id: string; lastSeen: number; isTyping: boolean; username: string }> // Added username
 }
 
 // Global in-memory store for rooms
@@ -26,7 +25,8 @@ export function roomExists(roomId: string): boolean {
   return !!rooms[roomId]
 }
 
-export function generateShortId(length = 8): string {
+export function generateShortId(length = 4): string {
+  // Changed default length to 4
   const characters = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789"
   let result = ""
   for (let i = 0; i < length; i++) {
@@ -36,10 +36,12 @@ export function generateShortId(length = 8): string {
 }
 
 // Helper to clean up inactive users (same logic as before)
-export function cleanupUsers(users: Record<string, { id: string; lastSeen: number; isTyping: boolean }>) {
+export function cleanupUsers(
+  users: Record<string, { id: string; lastSeen: number; isTyping: boolean; username: string }>,
+) {
   const now = Date.now()
   const TIMEOUT = 30000 // Users considered inactive after 30 seconds
-  const activeUsers: Record<string, { id: string; lastSeen: number; isTyping: boolean }> = {}
+  const activeUsers: Record<string, { id: string; lastSeen: number; isTyping: boolean; username: string }> = {}
 
   for (const userId in users) {
     if (now - users[userId].lastSeen < TIMEOUT) {
