@@ -56,7 +56,7 @@ import {
   SidebarProvider,
   SidebarTrigger, // Re-import SidebarTrigger for mobile
 } from "@/components/ui/sidebar"
-import { LineNumberedTextarea } from "@/components/ui/line-numbered-textarea" // Import new component
+import { Textarea } from "@/components/ui/textarea" // Import Textarea directly
 import type { Notebook, UserPresence } from "@/lib/db" // Import UserPresence
 
 // Helper to format time for the countdown
@@ -849,97 +849,96 @@ export default function RoomPage() {
               {/* Toolbar */}
               <div className="flex flex-wrap gap-2 sm:gap-3 justify-between items-center mb-4">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-3 h-3 rounded-full transition-colors duration-300 ${
-                        isConnected ? "bg-green-400 animate-pulse" : "bg-gray-400"
-                      }`}
-                    ></div>
-                    <span className="text-xs sm:text-sm font-medium text-gray-700">Shared Workspace</span>
+                  <div
+                    className={`w-3 h-3 rounded-full transition-colors duration-300 ${
+                      isConnected ? "bg-green-400 animate-pulse" : "bg-gray-400"
+                    }`}
+                  ></div>
+                  <span className="text-xs sm:text-sm font-medium text-gray-700">Shared Workspace</span>
+                </div>
+
+                {/* Unpublished Changes Indicator */}
+                {hasUnpublishedChanges && (
+                  <div className="flex items-center gap-1 text-xs text-orange-600 animate-fade-in">
+                    <div className="w-2 h-2 bg-orange-400 rounded-full animate-ping"></div>
+                    <span>Unpublished changes</span>
                   </div>
-
-                  {/* Unpublished Changes Indicator */}
-                  {hasUnpublishedChanges && (
-                    <div className="flex items-center gap-1 text-xs text-orange-600 animate-fade-in">
-                      <div className="w-2 h-2 bg-orange-400 rounded-full animate-ping"></div>
-                      <span>Unpublished changes</span>
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    onClick={copyRoomLinkToClipboard}
-                    variant="outline"
-                    size="sm"
-                    className="hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-colors bg-transparent"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    <span className="hidden sm:inline">Share Room</span>
-                  </Button>
-                  <Button
-                    onClick={() => fetchLatestContent(true)}
-                    variant="outline"
-                    size="sm"
-                    disabled={isFetching}
-                    className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors bg-transparent"
-                  >
-                    {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-                    <span className="hidden sm:inline">Refresh</span>
-                  </Button>
-                  <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
-                    <AlertDialogTrigger asChild>
-                      <Button
-                        onClick={handleClear}
-                        variant="outline"
-                        size="sm"
-                        disabled={isFetching}
-                        className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        <span className="hidden sm:inline">Clear</span>
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                          This action will clear the text for ALL connected users in this room. This cannot be undone.
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={confirmClearAll}>Clear for Everyone</AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
-                  <Button
-                    onClick={copyToClipboard}
-                    size="sm"
-                    disabled={!text.trim()}
-                    className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
-                  >
-                    <Copy className="w-4 h-4" />
-                    <span className="hidden sm:inline">Copy All</span>
-                  </Button>
-                  <Button
-                    onClick={handlePublish}
-                    size="sm"
-                    disabled={!hasUnpublishedChanges || isPublishing}
-                    className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
-                  >
-                    {isPublishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="w-4 h-4" />}
-                    <span className="hidden sm:inline">Publish</span>
-                  </Button>
-                </div>
+                )}
               </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={copyRoomLinkToClipboard}
+                  variant="outline"
+                  size="sm"
+                  className="hover:bg-purple-50 hover:border-purple-200 hover:text-purple-600 transition-colors bg-transparent"
+                >
+                  <Share2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Share Room</span>
+                </Button>
+                <Button
+                  onClick={() => fetchLatestContent(true)}
+                  variant="outline"
+                  size="sm"
+                  disabled={isFetching}
+                  className="hover:bg-blue-50 hover:border-blue-200 hover:text-blue-600 transition-colors bg-transparent"
+                >
+                  {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                  <span className="hidden sm:inline">Refresh</span>
+                </Button>
+                <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      onClick={handleClear}
+                      variant="outline"
+                      size="sm"
+                      disabled={isFetching}
+                      className="hover:bg-red-50 hover:border-red-200 hover:text-red-600 transition-colors bg-transparent"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span className="hidden sm:inline">Clear</span>
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This action will clear the text for ALL connected users in this room. This cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction onClick={confirmClearAll}>Clear for Everyone</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                <Button
+                  onClick={copyToClipboard}
+                  size="sm"
+                  disabled={!text.trim()}
+                  className="flex items-center gap-2 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 transition-all duration-200"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span className="hidden sm:inline">Copy All</span>
+                </Button>
+                <Button
+                  onClick={handlePublish}
+                  size="sm"
+                  disabled={!hasUnpublishedChanges || isPublishing}
+                  className="flex items-center gap-2 bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 transition-all duration-200"
+                >
+                  {isPublishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="w-4 h-4" />}
+                  <span className="hidden sm:inline">Publish</span>
+                </Button>
+              </div>
+            </div>
 
-              {/* Text Editor */}
-              <div className="relative flex-1">
-                <LineNumberedTextarea
-                  ref={textareaRef}
-                  value={text}
-                  onChange={(e) => handleTextChange(e.target.value)}
-                  placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
+            {/* Text Editor */}
+            <div className="relative flex-1">
+              <Textarea
+                ref={textareaRef}
+                value={text}
+                onChange={(e) => handleTextChange(e.target.value)}
+                placeholder="🚀 Start typing here... Your changes will be private until you hit 'Publish'.
 
 ✨ Perfect for:
 • Drafting content before sharing
@@ -949,73 +948,42 @@ export default function RoomPage() {
 • Note-taking
 
 Hit 'Publish' to sync your content with everyone connected!"
-                  className="min-h-[50vh] md:min-h-[calc(100%-80px)] resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50 h-full"
-                  aria-label="Shared text area for real-time collaboration"
-                  disabled={!currentUsernameRef.current}
-                />
-              </div>
+                className="h-full w-full resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-300 transition-all duration-200 bg-white/50" // Removed min-h and h-full, relying on flex-1 parent
+                aria-label="Shared text area for real-time collaboration"
+                disabled={!currentUsernameRef.current}
+              />
+            </div>
 
-              {/* Dynamic Stats Bar */}
-              <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
-                <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
-                  <span className="font-medium">{text.length.toLocaleString()} characters</span>
-                  <span>•</span>
-                  <span>{text.split("\n").length.toLocaleString()} lines</span>
-                  <span>•</span>
-                  <span>
-                    {text
-                      .split(/\s+/)
-                      .filter((w) => w.length > 0)
-                      .length.toLocaleString()}{" "}
-                    words
-                  </span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {isConnected ? (
-                    <>
-                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                      <span className="text-green-600 font-medium">Connected</span>
-                    </>
-                  ) : (
-                    <>
-                      <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                      <span className="text-gray-600 font-medium">Disconnected</span>
-                    </>
-                  )}
-                </div>
+            {/* Dynamic Stats Bar */}
+            <div className="flex flex-wrap justify-between items-center mt-4 text-sm gap-2">
+              <div className="flex flex-wrap items-center gap-2 sm:gap-6 text-gray-500">
+                <span className="font-medium">{text.length.toLocaleString()} characters</span>
+                <span>•</span>
+                <span>{text.split("\n").length.toLocaleString()} lines</span>
+                <span>•</span>
+                <span>
+                  {text
+                    .split(/\s+/)
+                    .filter((w) => w.length > 0)
+                    .length.toLocaleString()}{" "}
+                  words
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                {isConnected ? (
+                  <>
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-green-600 font-medium">Connected</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                    <span className="text-gray-600 font-medium">Disconnected</span>
+                  </>
+                )}
               </div>
             </div>
           </Card>
-          {/* Footer Info */}
-          <div className="mt-8 text-center pb-4 px-4 md:px-6">
-            <div className="inline-flex flex-wrap items-center justify-center gap-4 px-4 py-3 bg-white/60 rounded-2xl text-xs sm:text-sm text-gray-600 backdrop-blur-sm shadow-lg sm:gap-6 sm:px-8 sm:py-4">
-              <div className="flex items-center gap-2">
-                <span>🔒</span>
-                <span>No registration required</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <span>💾</span>
-                <span>Data ephemeral per room</span>
-              </div>
-              <span>•</span>
-              <div className="flex items-center gap-2">
-                <span>⚡</span>
-                <span>Manual synchronization via Publish</span>
-              </div>
-            </div>
-            <p className="mt-4 text-xs text-gray-500">
-              &copy; {new Date().getFullYear()} Copy-ME by{" "}
-              <a
-                href="https://github.com/selvin-paul-raj"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                Selvin PaulRaj K
-              </a>
-            </p>
-          </div>
         </SidebarInset>
       </div>
     </SidebarProvider>
