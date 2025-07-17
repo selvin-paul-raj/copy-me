@@ -16,6 +16,7 @@ import {
   Home,
   Share2,
   Plus,
+  FolderPlus,
   Trash2,
   FileText,
   Loader2,
@@ -731,22 +732,23 @@ export default function RoomPage() {
           </SidebarFooter>
         </Sidebar>
         {/* Mobile Sidebar (Sheet) */}
-        <SidebarTrigger className="md:hidden fixed top-4 left-4 z-20" /> {/* Show on mobile */}
+        <SidebarTrigger className="md:hidden fixed top-4 left-4 z-20 font-bold" /> {/* Show on mobile */}
         <Sidebar
           collapsible="offcanvas" // Use offcanvas for mobile
           variant="sidebar"
-          className="bg-white/90 backdrop-blur-sm border-r border-gray-200 shadow-lg md:hidden" // Show on mobile, hide on md and up
+          className="!bg-white/95 border-r border-slate-700 shadow-xl md:hidden" // Professional dark theme
+  
         >
-          <SidebarHeader>
-            <div className="flex items-center justify-between">
-              <h2 className="text-xl font-bold text-gray-800">Notebooks</h2>
-              <Button variant="ghost" size="icon" onClick={() => setShowAddNotebookModal(true)}>
-                <Plus />
+          <SidebarHeader className="bg-white/95 border-b border-slate-700 ">
+            <div className="flex items-center justify-around pt-6">
+              <h2 className="text-xl font-bold text-black">Notebooks</h2>
+              <Button variant="ghost" size="icon" onClick={() => setShowAddNotebookModal(true)} className="text-slate-300 hover:text-white hover:bg-slate-800">
+                <FolderPlus className="w-4 h-4 text-black" />
                 <span className="sr-only">Add Notebook</span>
               </Button>
             </div>
           </SidebarHeader>
-          <SidebarContent>
+          <SidebarContent className="bg-white/95">
             <SidebarGroup>
               <SidebarMenu>
                 {notebooks.map((notebook) => (
@@ -754,9 +756,9 @@ export default function RoomPage() {
                     <SidebarMenuButton
                       isActive={activeNotebookId === notebook.id}
                       onClick={() => setActiveNotebookId(notebook.id)}
-                      className="justify-between"
+                      className="justify-between text-slate-300 hover:text-white hover:bg-slate-800 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
                     >
-                      <span className="flex items-center gap-2">
+                      <span className="flex items-center gap-2 text-black">
                         <FileText className="w-4 h-4" />
                         {notebook.name}
                       </span>
@@ -764,7 +766,7 @@ export default function RoomPage() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-6 w-6 text-gray-500 hover:text-red-500"
+                          className="h-6 w-6 text-red-500 hover:text-red-400 hover:bg-slate-800"
                           onClick={(e) => {
                             e.stopPropagation()
                             handleDeleteNotebook(notebook)
@@ -780,13 +782,15 @@ export default function RoomPage() {
                 ))}
               </SidebarMenu>
             </SidebarGroup>
+            
             {onlineUsers.length > 0 && (
               <SidebarGroup className="mt-4">
-                <SidebarGroupLabel>Online Users ({onlineUsers.length})</SidebarGroupLabel>
+                <SidebarGroupLabel className="text-black font-medium">Online Users ({onlineUsers.length})</SidebarGroupLabel>
                 <SidebarMenu>
+                  <hr/>
                   {onlineUsers.map((user) => (
                     <SidebarMenuItem key={user.id}>
-                      <SidebarMenuButton className="justify-start">
+                      <SidebarMenuButton className="justify-start text-green-500 hover:text-slate-300 hover:bg-slate-800">
                         <User className="w-4 h-4" />
                         <span>
                           {user.username} {user.id === userIdRef.current ? "(You)" : ""}
@@ -798,15 +802,8 @@ export default function RoomPage() {
               </SidebarGroup>
             )}
           </SidebarContent>
-          <SidebarFooter>
-            <Button
-              onClick={() => router.push("/")}
-              variant="ghost"
-              className="w-full justify-start text-gray-600 hover:bg-gray-100 hover:text-gray-800"
-            >
-              <Home className="mr-2 h-4 w-4" />
-              Go to Home
-            </Button>
+          <SidebarFooter className="bg-white/95 border-t border-slate-700">
+          <Homebtn/>
           </SidebarFooter>
         </Sidebar>
         <SidebarInset className="flex-1 flex flex-col p-2 md:p-4">
