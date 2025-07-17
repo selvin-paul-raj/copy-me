@@ -819,8 +819,10 @@ export default function RoomPage() {
               {/* Reduced mb-2 to mb-1 */}
               <div className="relative">
                 <Zap className="w-6 h-6 text-blue-600" /> {/* Reduced w-8 h-8 to w-6 h-6 */}
-                {isConnected && (
+                {isConnected ? (
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
+                ) : (
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-pulse"></div>  
                 )}
               </div>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
