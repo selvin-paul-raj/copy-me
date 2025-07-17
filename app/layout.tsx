@@ -3,7 +3,7 @@ import type { Metadata } from "next"
 import { Inter } from "next/font/google"
 import "./globals.css"
 import { Toaster } from "@/components/ui/toaster"
-
+import { Analytics } from "@vercel/analytics/next"
 const inter = Inter({ subsets: ["latin"] })
 
 // --- SEO Metadata for Copy-ME ---
@@ -55,6 +55,7 @@ export default function RootLayout({
       <body className={inter.className}>
         {children}
         <Toaster />
+        <Analytics/>
       </body>
     </html>
   )
