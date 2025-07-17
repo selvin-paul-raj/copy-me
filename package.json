@@ -1,12 +1,44 @@
 {
-  "name": "my-v0-project",
-  "version": "0.1.0",
-  "private": true,
+  "name": "copy-me",
+  "version": "1.0.0",
+  "description": "A modern, real-time collaborative text editor with multi-notebook support",
+  "author": {
+    "name": "Selvin Paul Raj",
+    "email": "selvinpaulraj@gmail.com",
+    "url": "https://github.com/selvin-paul-raj"
+  },
+  "license": "MIT",
+  "homepage": "https://spr-copy-me.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/selvin-paul-raj/copy_me.git"
+  },
+  "bugs": {
+    "url": "https://github.com/selvin-paul-raj/copy_me/issues"
+  },
+  "keywords": [
+    "collaborative-editor",
+    "real-time",
+    "text-editor",
+    "nextjs",
+    "typescript",
+    "supabase",
+    "tailwindcss"
+  ],
+  "private": false,
   "scripts": {
-    "build": "next build",
     "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
     "lint": "next lint",
-    "start": "next start"
+    "lint:fix": "next lint --fix",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "test": "echo \"No tests specified\" && exit 0",
+    "analyze": "cross-env ANALYZE=true next build",
+    "clean": "rimraf .next out dist build",
+    "postinstall": "echo \"Setup complete! Run 'npm run dev' to start development.\""
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -64,8 +96,16 @@
     "@types/node": "^22",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "cross-env": "^7.0.3",
+    "prettier": "^3.1.0",
+    "prettier-plugin-tailwindcss": "^0.5.7",
     "postcss": "^8.5",
+    "rimraf": "^5.0.5",
     "tailwindcss": "^3.4.17",
     "typescript": "^5"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
   }
 }
