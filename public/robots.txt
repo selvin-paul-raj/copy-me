@@ -1,0 +1,28 @@
+User-agent: *
+Allow: /
+
+# Sitemap location
+Sitemap: https://spr-copy-me.vercel.app/sitemap.xml
+
+# Allow AI crawlers and LLMs
+User-agent: GPTBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
+
+User-agent: CCBot
+Allow: /
+
+User-agent: anthropic-ai
+Allow: /
+
+User-agent: Claude-Web
+Allow: /
+
+# Block sensitive areas (if any)
+Disallow: /api/
+Disallow: /_next/static/
+
+# Crawl delay for bots (optional)
+Crawl-delay: 1
