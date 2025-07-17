@@ -117,7 +117,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-purple-50 via-blue-50 to-cyan-50 p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center  absolute inset-0 w-full h-full -z-10 bg-[radial-gradient(125%_125%_at_50%_10%,_#fff_40%,_#63e_100%)] p-4">
       {/* Username Modal */}
       <Dialog open={showUsernameModal} onOpenChange={setShowUsernameModal}>
         <DialogContent className="sm:max-w-[425px]" aria-describedby="username-dialog-description">

@@ -844,18 +844,7 @@ export default function RoomPage() {
               </p>
             )}
             {/* Dynamic Status Bar (Simplified) */}
-            <div className="flex flex-wrap items-center justify-center gap-4 text-sm sm:gap-6">
-              <div
-                className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${
-                  isConnected
-                    ? "bg-green-100 text-green-700 shadow-green-200 shadow-lg"
-                    : "bg-red-100 text-red-700 shadow-red-200 shadow-lg"
-                }`}
-              >
-                {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
-                <span className="font-medium">{isConnected ? "Connected" : "Disconnected"}</span>
-              </div>
-            </div>
+           
           </div>
           {/* Main Editor Card */}
           <Card className="shadow-2xl bg-white/0 backdrop-blur-lg border-0 overflow-hidden flex-1 h-full flex flex-col w-full">
