@@ -68,6 +68,7 @@ export default function RoomPage() {
   // Add new state variables for undo/redo history
   const [textHistory, setTextHistory] = useState<string[]>([])
   const [historyIndex, setHistoryIndex] = useState(-1)
+  const debounceTimeoutRef = useRef<NodeJS.Timeout | null>(null) // Ref for debounce timeout
   const [isConnected, setIsConnected] = useState(false)
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
@@ -175,7 +176,7 @@ export default function RoomPage() {
     fetchLatestContent(true)
   }
 
-  // Modify fetchLatestContent to reset history
+  // Modify fetchLatestContent to reset history and clear debounce
   const fetchLatestContent = useCallback(
     async (forceUpdate = false) => {
       if (!currentUsernameRef.current || !userIdRef.current) return
@@ -219,7 +220,10 @@ export default function RoomPage() {
           setHasUnpublishedChanges(false)
           setIsConnected(true)
 
-          // Reset history on successful fetch
+          // Clear any pending debounce and reset history on successful fetch
+          if (debounceTimeoutRef.current) {
+            clearTimeout(debounceTimeoutRef.current)
+          }
           setTextHistory([serverContent])
           setHistoryIndex(0)
         } else if (response.status === 404) {
@@ -256,21 +260,39 @@ export default function RoomPage() {
     [roomId, toast, activeNotebookId],
   )
 
-  // Modify handleTextChange to manage history
+  // Modify handleTextChange to debounce history updates
   const handleTextChange = useCallback(
     (value: string) => {
       setText(value)
       setHasUnpublishedChanges(true)
 
-      // Update history
-      setTextHistory((prevHistory) => {
-        const newHistory = prevHistory.slice(0, historyIndex + 1)
-        newHistory.push(value)
-        return newHistory
-      })
-      setHistoryIndex((prevIndex) => prevIndex + 1)
+      // Clear any existing debounce timeout
+      if (debounceTimeoutRef.current) {
+        clearTimeout(debounceTimeoutRef.current)
+      }
+
+      // Set a new debounce timeout to add to history after a pause
+      debounceTimeoutRef.current = setTimeout(() => {
+        setTextHistory((prevHistory) => {
+          // Only add to history if the new value is different from the last saved history entry
+          // This prevents adding duplicate entries if the debounce fires but text hasn't changed
+          if (prevHistory[historyIndex] !== value) {
+            const newHistory = prevHistory.slice(0, historyIndex + 1) // Truncate history if we're not at the end
+            newHistory.push(value)
+            return newHistory
+          }
+          return prevHistory
+        })
+        setHistoryIndex((prevIndex) => {
+          // Only increment if a new history entry was actually added
+          if (textHistory[prevIndex] !== value) {
+            return prevIndex + 1
+          }
+          return prevIndex
+        })
+      }, 500) // Debounce for 500ms
     },
-    [historyIndex],
+    [historyIndex, textHistory], // textHistory is needed to check prevHistory[historyIndex]
   )
 
   // Add undo function
@@ -279,6 +301,7 @@ export default function RoomPage() {
       const newIndex = historyIndex - 1
       setText(textHistory[newIndex])
       setHistoryIndex(newIndex)
+      textareaRef.current?.focus() // Ensure textarea regains focus
       setHasUnpublishedChanges(textHistory[newIndex] !== lastPublishedTextRef.current)
     }
   }, [historyIndex, textHistory])
@@ -289,11 +312,12 @@ export default function RoomPage() {
       const newIndex = historyIndex + 1
       setText(textHistory[newIndex])
       setHistoryIndex(newIndex)
+      textareaRef.current?.focus() // Ensure textarea regains focus
       setHasUnpublishedChanges(textHistory[newIndex] !== lastPublishedTextRef.current)
     }
   }, [historyIndex, textHistory])
 
-  // Modify handlePublish to reset history
+  // Modify handlePublish to reset history and clear debounce
   const handlePublish = useCallback(async () => {
     if (!roomExistsOnServer || !currentUsernameRef.current || !userIdRef.current) return
     setIsPublishing(true) // Set publishing state
@@ -335,7 +359,10 @@ export default function RoomPage() {
           description: "Your changes are now live for everyone.",
           duration: 2000,
         })
-        // Reset history on successful publish
+        // Clear any pending debounce and reset history on successful publish
+        if (debounceTimeoutRef.current) {
+          clearTimeout(debounceTimeoutRef.current)
+        }
         setTextHistory([newText])
         setHistoryIndex(0)
       } else if (response.status === 404) {
