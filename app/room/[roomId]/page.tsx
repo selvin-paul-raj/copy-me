@@ -1,4 +1,4 @@
-un"use client"
+"use client"
 
 import { SidebarGroupLabel } from "@/components/ui/sidebar"
 
