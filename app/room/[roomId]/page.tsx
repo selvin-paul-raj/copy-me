@@ -1,4 +1,4 @@
-"use client"
+un"use client"
 
 import { SidebarGroupLabel } from "@/components/ui/sidebar"
 
@@ -6,7 +6,7 @@ import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { Copy, Zap, Upload, RefreshCw, Share2, Plus, FolderPlus, Trash2, FileText, Loader2, User } from "lucide-react"
+import { Copy, Zap, Upload, RefreshCw, Share2, Plus, FolderPlus, Trash2, FileText, Loader2, User,Redo2,Undo2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   AlertDialog,
@@ -958,21 +958,7 @@ export default function RoomPage() {
                   disabled={historyIndex <= 0}
                   className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-4 h-4"
-                  >
-                    <path d="M9.5 12.5L4.5 7.5L9.5 2.5"></path>
-                    <path d="M18 15H12C9.23858 15 7 17.2386 7 20V21"></path>
-                  </svg>
+                 <Undo2 />                  
                   <span className="hidden sm:inline">Undo</span>
                 </Button>
                 <Button
@@ -982,21 +968,7 @@ export default function RoomPage() {
                   disabled={historyIndex >= textHistory.length - 1}
                   className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
                 >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    width="24"
-                    height="24"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="w-4 h-4"
-                  >
-                    <path d="M14.5 12.5L19.5 7.5L14.5 2.5"></path>
-                    <path d="M6 15H12C14.7614 15 17 17.2386 17 20V21"></path>
-                  </svg>
+                  <Redo2 />
                   <span className="hidden sm:inline">Redo</span>
                 </Button>
                 <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
