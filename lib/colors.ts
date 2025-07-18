@@ -1,15 +1,17 @@
 // lib/colors.ts
 export const NOTEBOOK_COLORS = [
-  "border-blue-500",
-  "border-green-500",
-  "border-purple-500",
-  "border-orange-500",
-  "border-red-500",
-  "border-teal-500",
-  "border-indigo-500",
-  "border-pink-500",
+  "border-blue-300",
+  "border-green-300",
+  "border-purple-300",
+  "border-yellow-300",
+  "border-pink-300",
+  "border-indigo-300",
+  "border-teal-300",
+  "border-orange-300",
+  "border-red-300",
+  "border-cyan-300",
 ]
 
-export const getNotebookColor = (index: number): string => {
+export function getNotebookColor(index: number): string {
   return NOTEBOOK_COLORS[index % NOTEBOOK_COLORS.length]
 }

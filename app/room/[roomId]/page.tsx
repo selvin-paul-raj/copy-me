@@ -109,7 +109,8 @@ export default function RoomPage() {
   const currentUsernameRef = useRef<string>("")
 
   // Initialize useTextHistory with the current active notebook's content
-  const { text, setTextWithHistory, undo, redo, canUndo, canRedo, resetHistory } = useTextHistory("") // Initial empty string, will be updated by useEffect
+  // The initial empty string will be replaced by actual content from fetchLatestContent
+  const { text, setText, undo, redo, canUndo, canRedo, resetHistory } = useTextHistory("")
 
   // Initialize userId and username from URL/localStorage
   useEffect(() => {
@@ -138,6 +139,7 @@ export default function RoomPage() {
       setShowUsernameModal(true)
     }
 
+    // Only fetch content if username and userId are available
     if (currentUsernameRef.current && userIdRef.current) {
       fetchLatestContent(true)
     }
@@ -147,8 +149,9 @@ export default function RoomPage() {
   useEffect(() => {
     const activeNb = notebooks.find((nb) => nb.id === activeNotebookId)
     if (activeNb) {
-      // Only update if the text from history is different from the active notebook's content
-      // This prevents resetting history when the user types and the history hook updates 'text'
+      // Only reset history if the content from the active notebook is different
+      // from the current text in the editor. This prevents resetting history
+      // when the user is actively typing and the `text` state is updated by `setText`.
       if (text !== activeNb.content) {
         resetHistory(activeNb.content)
       }
@@ -156,7 +159,7 @@ export default function RoomPage() {
       lastPublishedTextRef.current = activeNb.content
       setHasUnpublishedChanges(false)
     }
-  }, [activeNotebookId, notebooks, resetHistory, text]) // Added text to dependency array
+  }, [activeNotebookId, notebooks, resetHistory, text])
 
   // Room expiry countdown timer
   useEffect(() => {
@@ -193,12 +196,16 @@ export default function RoomPage() {
     currentUsernameRef.current = trimmedUsername
     localStorage.setItem("copy-me-username", trimmedUsername)
     setShowUsernameModal(false)
-    fetchLatestContent(true)
+    fetchLatestContent(true) // Fetch content after username is set
   }
 
   const fetchLatestContent = useCallback(
     async (forceUpdate = false) => {
-      if (!currentUsernameRef.current || !userIdRef.current) return
+      if (!currentUsernameRef.current || !userIdRef.current) {
+        // If username or userId are not set, don't proceed with fetch
+        // This can happen if the username modal is still open or not submitted
+        return
+      }
 
       setIsFetching(true)
       try {
@@ -234,7 +241,7 @@ export default function RoomPage() {
           const serverContent = currentNb ? currentNb.content : ""
 
           // Update text via history hook
-          setTextWithHistory(serverContent)
+          setText(serverContent) // Use setText from useTextHistory
           lastKnownServerTextRef.current = serverContent
           if (serverContent === lastPublishedTextRef.current) {
             setHasUnpublishedChanges(false)
@@ -273,15 +280,15 @@ export default function RoomPage() {
         setIsFetching(false)
       }
     },
-    [roomId, toast, activeNotebookId, setTextWithHistory],
+    [roomId, toast, activeNotebookId, setText], // Depend on setText
   )
 
   const handleTextChange = useCallback(
     (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setTextWithHistory(e.target.value)
+      setText(e.target.value) // Use setText from useTextHistory
       setHasUnpublishedChanges(true)
     },
-    [setTextWithHistory],
+    [setText],
   )
 
   const handlePublish = useCallback(async () => {
@@ -317,7 +324,7 @@ export default function RoomPage() {
         const serverContent = currentNb ? currentNb.content : ""
 
         // Update text via history hook after successful publish
-        setTextWithHistory(serverContent)
+        setText(serverContent) // Use setText from useTextHistory
         lastKnownServerTextRef.current = serverContent
         lastPublishedTextRef.current = serverContent
         setHasUnpublishedChanges(false)
@@ -357,7 +364,7 @@ export default function RoomPage() {
     } finally {
       setIsPublishing(false) // Reset publishing state
     }
-  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId, setTextWithHistory])
+  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId, setText]) // Depend on setText
 
   const copyToClipboard = async () => {
     try {
@@ -402,7 +409,7 @@ export default function RoomPage() {
 
   const handleClear = () => {
     if (text.trim() !== "") {
-      setTextWithHistory("") // Use history hook
+      setText("") // Use setText from useTextHistory
       setHasUnpublishedChanges(true)
       toast({
         title: "🗑️ Cleared Locally",
@@ -415,7 +422,7 @@ export default function RoomPage() {
   }
 
   const confirmClearAll = useCallback(async () => {
-    setTextWithHistory("") // Use history hook
+    setText("") // Use setText from useTextHistory
     setHasUnpublishedChanges(true)
     setShowClearAllConfirm(false)
     await handlePublish()
@@ -424,7 +431,7 @@ export default function RoomPage() {
       description: "The text has been cleared for all connected users.",
       duration: 2500,
     })
-  }, [handlePublish, setTextWithHistory])
+  }, [handlePublish, setText]) // Depend on setText
 
   const handleAddNotebook = async () => {
     if (!newNotebookName.trim()) {
@@ -546,7 +553,11 @@ export default function RoomPage() {
 
   // Get the color for the active notebook
   const activeNotebook = notebooks.find((nb) => nb.id === activeNotebookId)
-  const activeNotebookColorClass = activeNotebook?.color || "border-gray-300" // Default color
+  // Ensure a default color class if activeNotebook or its color is undefined
+  const activeNotebookColorClass = activeNotebook?.color || "border-gray-300"
+
+  // Determine if the textarea should be disabled
+  const isTextareaDisabled = !currentUsernameRef.current || isFetching || isPublishing
 
   if (!roomExistsOnServer) {
     return (
@@ -995,7 +1006,7 @@ export default function RoomPage() {
                 placeholder="🚀 Start typing here... "
                 className={`h-full w-full resize-none text-base leading-relaxed border-2 ${activeNotebookColorClass} focus:border-blue-200 transition-all duration-200 bg-white/50`}
                 aria-label="Shared text area for real-time collaboration"
-                disabled={!currentUsernameRef.current}
+                disabled={isTextareaDisabled} // Use the new disabled state
               />
             </div>
             {/* Dynamic Stats Bar */}
