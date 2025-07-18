@@ -13,26 +13,26 @@ Thank you for your interest in contributing to Copy-ME! This document provides g
 ### Development Setup
 
 1. **Fork the repository**
-   ```bash
+   \`\`\`bash
    git clone https://github.com/your-username/copy_me.git
    cd copy_me
-   ```
+   \`\`\`
 
 2. **Install dependencies**
-   ```bash
+   \`\`\`bash
    npm install
-   ```
+   \`\`\`
 
 3. **Set up environment variables**
-   ```bash
+   \`\`\`bash
    cp .env.example .env.local
    # Edit .env.local with your Supabase credentials
-   ```
+   \`\`\`
 
 4. **Start development server**
-   ```bash
+   \`\`\`bash
    npm run dev
-   ```
+   \`\`\`
 
 ## 🎯 How to Contribute
 
@@ -105,7 +105,7 @@ Use one of these prefixes:
 - `test:` for testing changes
 
 ### PR Description Template
-```markdown
+\`\`\`markdown
 ## Description
 Brief description of changes
 
@@ -122,7 +122,7 @@ Brief description of changes
 
 ## Screenshots (if applicable)
 Add screenshots for UI changes
-```
+\`\`\`
 
 ## 🐛 Bug Reports
 
@@ -132,7 +132,7 @@ Add screenshots for UI changes
 3. Test in different browsers
 
 ### Bug Report Template
-```markdown
+\`\`\`markdown
 **Describe the bug**
 A clear description of what the bug is.
 
@@ -152,12 +152,12 @@ If applicable, add screenshots.
 - Browser: [e.g. Chrome, Safari]
 - Version: [e.g. 22]
 - Device: [e.g. iPhone6, Desktop]
-```
+\`\`\`
 
 ## 💡 Feature Requests
 
 ### Feature Request Template
-```markdown
+\`\`\`markdown
 **Is your feature request related to a problem?**
 A clear description of what the problem is.
 
@@ -169,12 +169,12 @@ Alternative solutions or features you've considered.
 
 **Additional context**
 Any other context or screenshots about the feature request.
-```
+\`\`\`
 
 ## 🔧 Development Tips
 
 ### Useful Commands
-```bash
+\`\`\`bash
 # Development
 npm run dev          # Start development server
 npm run build        # Build for production
@@ -183,17 +183,17 @@ npm run type-check   # Check TypeScript types
 
 # Database
 # Set up your Supabase project and run the SQL schema
-```
+\`\`\`
 
 ### File Structure Guidelines
-```
+\`\`\`
 app/
 ├── api/             # API routes
 ├── room/            # Room-related pages
 ├── components/      # Reusable components
 ├── lib/             # Utilities and configurations
 └── hooks/           # Custom React hooks
-```
+\`\`\`
 
 ## 📚 Resources
 

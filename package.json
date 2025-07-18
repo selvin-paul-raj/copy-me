@@ -1,21 +1,8 @@
 {
   "name": "copy-me",
   "version": "1.0.0",
+  "private": false,
   "description": "A modern, real-time collaborative text editor with multi-notebook support",
-  "author": {
-    "name": "Selvin Paul Raj",
-    "email": "selvinpaulraj@gmail.com",
-    "url": "https://github.com/selvin-paul-raj"
-  },
-  "license": "MIT",
-  "homepage": "https://spr-copy-me.vercel.app",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/selvin-paul-raj/copy_me.git"
-  },
-  "bugs": {
-    "url": "https://github.com/selvin-paul-raj/copy_me/issues"
-  },
   "keywords": [
     "collaborative-editor",
     "real-time",
@@ -25,20 +12,33 @@
     "supabase",
     "tailwindcss"
   ],
-  "private": false,
+  "homepage": "https://spr-copy-me.vercel.app",
+  "bugs": {
+    "url": "https://github.com/selvin-paul-raj/copy_me/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/selvin-paul-raj/copy_me.git"
+  },
+  "license": "MIT",
+  "author": {
+    "name": "Selvin Paul Raj",
+    "email": "selvinpaulraj@gmail.com",
+    "url": "https://github.com/selvin-paul-raj"
+  },
   "scripts": {
-    "dev": "next dev",
+    "analyze": "cross-env ANALYZE=true next build",
     "build": "next build",
-    "start": "next start",
-    "lint": "next lint",
-    "lint:fix": "next lint --fix",
-    "type-check": "tsc --noEmit",
+    "clean": "rimraf .next out dist build",
+    "dev": "next dev",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "postinstall": "echo \"Setup complete! Run 'npm run dev' to start development.\"",
+    "lint": "next lint",
+    "lint:fix": "next lint --fix",
+    "start": "next start",
     "test": "echo \"No tests specified\" && exit 0",
-    "analyze": "cross-env ANALYZE=true next build",
-    "clean": "rimraf .next out dist build",
-    "postinstall": "echo \"Setup complete! Run 'npm run dev' to start development.\""
+    "type-check": "tsc --noEmit"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",
@@ -69,8 +69,10 @@
     "@radix-ui/react-toggle": "latest",
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
+    "@remix-run/react": "latest",
     "@supabase/supabase-js": "latest",
-    "@vercel/analytics": "^1.5.0",
+    "@sveltejs/kit": "latest",
+    "@vercel/analytics": "latest",
     "autoprefixer": "^10.4.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
@@ -88,9 +90,12 @@
     "react-resizable-panels": "latest",
     "recharts": "latest",
     "sonner": "latest",
+    "svelte": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
     "vaul": "latest",
+    "vue": "latest",
+    "vue-router": "latest",
     "zod": "^3.24.1"
   },
   "devDependencies": {

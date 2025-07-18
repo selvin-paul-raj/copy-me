@@ -12,45 +12,45 @@ This document describes the API endpoints available in Copy-ME.
 ### Room Management
 
 #### Create Room
-```http
+\`\`\`http
 POST /api/create-room
-```
+\`\`\`
 
 Creates a new collaboration room.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "username": "string (2-20 characters)"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "roomId": "string (4 characters)",
   "username": "string"
 }
-```
+\`\`\`
 
 **Error Response:**
-```json
+\`\`\`json
 {
   "error": "string"
 }
-```
+\`\`\`
 
 ---
 
 #### Get Room Data
-```http
+\`\`\`http
 GET /api/room/[roomId]
-```
+\`\`\`
 
 Retrieves room information and content.
 
 **Response:**
-```json
+\`\`\`json
 {
   "notebooks": [
     {
@@ -70,7 +70,7 @@ Retrieves room information and content.
   "expiresAt": "string (ISO date)",
   "timestamp": "string (ISO date)"
 }
-```
+\`\`\`
 
 **Error Responses:**
 - `404`: Room not found or expired
@@ -79,24 +79,24 @@ Retrieves room information and content.
 ---
 
 #### Update Room Content
-```http
+\`\`\`http
 POST /api/room/[roomId]
-```
+\`\`\`
 
 Updates content for a specific notebook in the room.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "content": "string",
   "notebookId": "string",
   "userId": "string",
   "username": "string"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "notebooks": "Notebook[]",
@@ -104,119 +104,119 @@ Updates content for a specific notebook in the room.
   "timestamp": "string (ISO date)",
   "expiresAt": "string (ISO date)"
 }
-```
+\`\`\`
 
 ---
 
 ### Notebook Management
 
 #### Add Notebook
-```http
+\`\`\`http
 POST /api/room/[roomId]/add-notebook
-```
+\`\`\`
 
 Adds a new notebook to the room.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "notebookName": "string",
   "userId": "string",
   "username": "string"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "notebooks": "Notebook[]",
   "users": "UserPresence[]",
   "expiresAt": "string (ISO date)"
 }
-```
+\`\`\`
 
 ---
 
 #### Delete Notebook
-```http
+\`\`\`http
 POST /api/room/[roomId]/delete-notebook
-```
+\`\`\`
 
 Deletes a notebook from the room.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "notebookId": "string",
   "userId": "string",
   "username": "string"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "notebooks": "Notebook[]",
   "users": "UserPresence[]",
   "expiresAt": "string (ISO date)"
 }
-```
+\`\`\`
 
 ---
 
 ### User Presence
 
 #### Update User Presence (Heartbeat)
-```http
+\`\`\`http
 POST /api/room/[roomId]/heartbeat
-```
+\`\`\`
 
 Updates user presence and activity status.
 
 **Request Body:**
-```json
+\`\`\`json
 {
   "userId": "string",
   "username": "string"
 }
-```
+\`\`\`
 
 **Response:**
-```json
+\`\`\`json
 {
   "success": true,
   "users": "UserPresence[]",
   "expiresAt": "string (ISO date)"
 }
-```
+\`\`\`
 
 ---
 
 ## Data Models
 
 ### Notebook
-```typescript
+\`\`\`typescript
 interface Notebook {
   id: string;          // Unique identifier
   name: string;        // Display name
   content: string;     // Text content
   lastUpdate: number;  // Timestamp of last update
 }
-```
+\`\`\`
 
 ### UserPresence
-```typescript
+\`\`\`typescript
 interface UserPresence {
   id: string;        // Unique user identifier
   username: string;  // Display name
   lastSeen: number;  // Timestamp of last activity
 }
-```
+\`\`\`
 
 ### RoomData
-```typescript
+\`\`\`typescript
 interface RoomData {
   id: string;                // Room identifier
   created_at: string;        // ISO timestamp
@@ -225,7 +225,7 @@ interface RoomData {
   notebooks: Notebook[];     // Array of notebooks
   users: UserPresence[];     // Array of active users
 }
-```
+\`\`\`
 
 ---
 
@@ -239,11 +239,11 @@ interface RoomData {
 - **500 Internal Server Error**: Server error
 
 ### Error Response Format
-```json
+\`\`\`json
 {
   "error": "Error message describing what went wrong"
 }
-```
+\`\`\`
 
 ---
 
@@ -295,7 +295,7 @@ The application uses Supabase real-time subscriptions for:
 
 ### JavaScript/TypeScript Client
 
-```typescript
+\`\`\`typescript
 // Create a new room
 const createRoom = async (username: string) => {
   const response = await fetch('/api/create-room', {
@@ -330,7 +330,7 @@ const updateContent = async (roomId: string, content: string, notebookId: string
   
   return response.json();
 };
-```
+\`\`\`
 
 ---
 

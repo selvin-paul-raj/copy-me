@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { SidebarGroupLabel } from "@/components/ui/sidebar"
 
 import { useEffect, useState, useRef, useCallback } from "react"
@@ -8,12 +10,9 @@ import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import {
   Copy,
-  Wifi,
-  WifiOff,
   Zap,
   Upload,
   RefreshCw,
-  Home,
   Share2,
   Plus,
   FolderPlus,
@@ -21,6 +20,8 @@ import {
   FileText,
   Loader2,
   User,
+  Undo2,
+  Redo2,
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -60,6 +61,8 @@ import {
 import { Textarea } from "@/components/ui/textarea" // Import Textarea directly
 import type { Notebook, UserPresence } from "@/lib/db" // Import UserPresence
 import Homebtn from "@/components/ui/Homebtn" // Import Homebtn component
+import { useTextHistory } from "@/hooks/use-text-history" // Import useTextHistory hook
+
 // Helper to format time for the countdown
 const formatTimeRemaining = (ms: number) => {
   const totalSeconds = Math.floor(ms / 1000)
@@ -79,7 +82,6 @@ export default function RoomPage() {
   const router = useRouter()
   const roomId = params.roomId as string
 
-  const [text, setText] = useState("")
   const [isConnected, setIsConnected] = useState(false)
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
@@ -105,6 +107,9 @@ export default function RoomPage() {
   const lastKnownServerTextRef = useRef("")
   const lastPublishedTextRef = useRef("")
   const currentUsernameRef = useRef<string>("")
+
+  // Initialize useTextHistory with the current active notebook's content
+  const { text, setTextWithHistory, undo, redo, canUndo, canRedo, resetHistory } = useTextHistory("") // Initial empty string, will be updated by useEffect
 
   // Initialize userId and username from URL/localStorage
   useEffect(() => {
@@ -138,16 +143,20 @@ export default function RoomPage() {
     }
   }, [searchParams])
 
-  // Update active notebook content
+  // Update active notebook content and reset history when activeNotebookId or notebooks change
   useEffect(() => {
     const activeNb = notebooks.find((nb) => nb.id === activeNotebookId)
     if (activeNb) {
-      setText(activeNb.content)
+      // Only update if the text from history is different from the active notebook's content
+      // This prevents resetting history when the user types and the history hook updates 'text'
+      if (text !== activeNb.content) {
+        resetHistory(activeNb.content)
+      }
       lastKnownServerTextRef.current = activeNb.content
       lastPublishedTextRef.current = activeNb.content
       setHasUnpublishedChanges(false)
     }
-  }, [activeNotebookId, notebooks])
+  }, [activeNotebookId, notebooks, resetHistory, text]) // Added text to dependency array
 
   // Room expiry countdown timer
   useEffect(() => {
@@ -224,7 +233,8 @@ export default function RoomPage() {
           const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
           const serverContent = currentNb ? currentNb.content : ""
 
-          setText(serverContent)
+          // Update text via history hook
+          setTextWithHistory(serverContent)
           lastKnownServerTextRef.current = serverContent
           if (serverContent === lastPublishedTextRef.current) {
             setHasUnpublishedChanges(false)
@@ -263,13 +273,16 @@ export default function RoomPage() {
         setIsFetching(false)
       }
     },
-    [roomId, toast, activeNotebookId],
+    [roomId, toast, activeNotebookId, setTextWithHistory],
   )
 
-  const handleTextChange = useCallback((value: string) => {
-    setText(value)
-    setHasUnpublishedChanges(true)
-  }, [])
+  const handleTextChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      setTextWithHistory(e.target.value)
+      setHasUnpublishedChanges(true)
+    },
+    [setTextWithHistory],
+  )
 
   const handlePublish = useCallback(async () => {
     if (!roomExistsOnServer || !currentUsernameRef.current || !userIdRef.current) return
@@ -301,9 +314,12 @@ export default function RoomPage() {
         setExpiresAt(data.expiresAt) // Update expiry time
 
         const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
-        setText(currentNb ? currentNb.content : "")
-        lastKnownServerTextRef.current = currentNb ? currentNb.content : ""
-        lastPublishedTextRef.current = currentNb ? currentNb.content : ""
+        const serverContent = currentNb ? currentNb.content : ""
+
+        // Update text via history hook after successful publish
+        setTextWithHistory(serverContent)
+        lastKnownServerTextRef.current = serverContent
+        lastPublishedTextRef.current = serverContent
         setHasUnpublishedChanges(false)
         setIsConnected(true)
         toast({
@@ -341,7 +357,7 @@ export default function RoomPage() {
     } finally {
       setIsPublishing(false) // Reset publishing state
     }
-  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId])
+  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId, setTextWithHistory])
 
   const copyToClipboard = async () => {
     try {
@@ -386,7 +402,7 @@ export default function RoomPage() {
 
   const handleClear = () => {
     if (text.trim() !== "") {
-      setText("")
+      setTextWithHistory("") // Use history hook
       setHasUnpublishedChanges(true)
       toast({
         title: "🗑️ Cleared Locally",
@@ -399,7 +415,7 @@ export default function RoomPage() {
   }
 
   const confirmClearAll = useCallback(async () => {
-    setText("")
+    setTextWithHistory("") // Use history hook
     setHasUnpublishedChanges(true)
     setShowClearAllConfirm(false)
     await handlePublish()
@@ -408,7 +424,7 @@ export default function RoomPage() {
       description: "The text has been cleared for all connected users.",
       duration: 2500,
     })
-  }, [handlePublish])
+  }, [handlePublish, setTextWithHistory])
 
   const handleAddNotebook = async () => {
     if (!newNotebookName.trim()) {
@@ -527,6 +543,10 @@ export default function RoomPage() {
       setIsDeletingNotebook(false) // Reset loading state
     }
   }
+
+  // Get the color for the active notebook
+  const activeNotebook = notebooks.find((nb) => nb.id === activeNotebookId)
+  const activeNotebookColorClass = activeNotebook?.color || "border-gray-300" // Default color
 
   if (!roomExistsOnServer) {
     return (
@@ -675,6 +695,8 @@ export default function RoomPage() {
                       <span className="flex items-center gap-2">
                         <FileText className="w-4 h-4" />
                         {notebook.name}
+                        {/* Notebook color indicator */}
+                        <span className={`w-2 h-2 rounded-full ${notebook.color.replace("border-", "bg-")}`}></span>
                       </span>
                       {notebooks.length > 1 && (
                         <Button
@@ -715,20 +737,20 @@ export default function RoomPage() {
             )}
           </SidebarContent>
           <SidebarFooter>
-           <Homebtn />
+            <Homebtn />
             <div className="mt-1 text-center  px-1 md:px-2">
-            <p className=" text-xs text-gray-500">
-              &copy; {new Date().getFullYear()} Copy-ME {" "}
-              <a
-                href="https://github.com/selvin-paul-raj"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="underline"
-              >
-                Selvin PaulRaj K
-              </a>
-            </p>
-          </div>
+              <p className=" text-xs text-gray-500">
+                &copy; {new Date().getFullYear()} Copy-ME{" "}
+                <a
+                  href="https://github.com/selvin-paul-raj"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline"
+                >
+                  Selvin PaulRaj K
+                </a>
+              </p>
+            </div>
           </SidebarFooter>
         </Sidebar>
         {/* Mobile Sidebar (Sheet) */}
@@ -737,12 +759,16 @@ export default function RoomPage() {
           collapsible="offcanvas" // Use offcanvas for mobile
           variant="sidebar"
           className="!bg-white/95 border-r border-slate-700 shadow-xl md:hidden" // Professional dark theme
-  
         >
           <SidebarHeader className="bg-white/95 border-b border-slate-700 ">
             <div className="flex items-center justify-around pt-6">
               <h2 className="text-xl font-bold text-black">Notebooks</h2>
-              <Button variant="ghost" size="icon" onClick={() => setShowAddNotebookModal(true)} className="text-slate-300 hover:text-white hover:bg-slate-800">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setShowAddNotebookModal(true)}
+                className="text-slate-300 hover:text-white hover:bg-slate-800"
+              >
                 <FolderPlus className="w-4 h-4 text-black" />
                 <span className="sr-only">Add Notebook</span>
               </Button>
@@ -761,6 +787,8 @@ export default function RoomPage() {
                       <span className="flex items-center gap-2 text-black">
                         <FileText className="w-4 h-4" />
                         {notebook.name}
+                        {/* Notebook color indicator */}
+                        <span className={`w-2 h-2 rounded-full ${notebook.color.replace("border-", "bg-")}`}></span>
                       </span>
                       {notebooks.length > 1 && (
                         <Button
@@ -782,12 +810,14 @@ export default function RoomPage() {
                 ))}
               </SidebarMenu>
             </SidebarGroup>
-            
+
             {onlineUsers.length > 0 && (
               <SidebarGroup className="mt-4">
-                <SidebarGroupLabel className="text-black font-medium">Online Users ({onlineUsers.length})</SidebarGroupLabel>
+                <SidebarGroupLabel className="text-black font-medium">
+                  Online Users ({onlineUsers.length})
+                </SidebarGroupLabel>
                 <SidebarMenu>
-                  <hr/>
+                  <hr />
                   {onlineUsers.map((user) => (
                     <SidebarMenuItem key={user.id}>
                       <SidebarMenuButton className="justify-start text-green-500 hover:text-slate-300 hover:bg-slate-800">
@@ -803,7 +833,7 @@ export default function RoomPage() {
             )}
           </SidebarContent>
           <SidebarFooter className="bg-white/95 border-t border-slate-700">
-          <Homebtn/>
+            <Homebtn />
           </SidebarFooter>
         </Sidebar>
         <SidebarInset className="flex-1 flex flex-col p-2 md:p-4">
@@ -819,19 +849,19 @@ export default function RoomPage() {
                 {isConnected ? (
                   <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full animate-pulse"></div>
                 ) : (
-                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-pulse"></div>  
+                  <div className="absolute -top-1 -right-1 w-3 h-3 bg-red-400 rounded-full animate-pulse"></div>
                 )}
               </div>
               <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
                 {" "}
                 {/* Reduced font sizes */}
-                Copy-ME :  <code className="text-red-400">{roomId}</code>
+                Copy-ME : <code className="text-red-400">{roomId}</code>
               </h1>
             </div>
             <p className="text-sm sm:text-base text-gray-600 mb-1">
               {" "}
               {/* Reduced font size and mb-2 to mb-1 */}
-              Collaborative text editor  • Type anywhere • publish to sync everywhere
+              Collaborative text editor • Type anywhere • publish to sync everywhere
             </p>
             {expiresAt && (
               <p className="text-sm text-gray-500 mb-2">
@@ -843,7 +873,6 @@ export default function RoomPage() {
               </p>
             )}
             {/* Dynamic Status Bar (Simplified) */}
-           
           </div>
           {/* Main Editor Card */}
           <Card className="shadow-2xl bg-white/0 backdrop-blur-lg border-0 overflow-hidden flex-1 h-full flex flex-col w-full">
@@ -924,6 +953,28 @@ export default function RoomPage() {
                   <Copy className="w-4 h-4" />
                   <span className="hidden sm:inline">Copy All</span>
                 </Button>
+                {/* Undo Button */}
+                <Button
+                  onClick={undo}
+                  size="sm"
+                  disabled={!canUndo}
+                  variant="outline"
+                  className="hover:bg-gray-100 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
+                >
+                  <Undo2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Undo</span>
+                </Button>
+                {/* Redo Button */}
+                <Button
+                  onClick={redo}
+                  size="sm"
+                  disabled={!canRedo}
+                  variant="outline"
+                  className="hover:bg-gray-100 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
+                >
+                  <Redo2 className="w-4 h-4" />
+                  <span className="hidden sm:inline">Redo</span>
+                </Button>
                 <Button
                   onClick={handlePublish}
                   size="sm"
@@ -940,9 +991,9 @@ export default function RoomPage() {
               <Textarea
                 ref={textareaRef}
                 value={text}
-                onChange={(e) => handleTextChange(e.target.value)}
+                onChange={handleTextChange} // Use the new handler
                 placeholder="🚀 Start typing here... "
-                className="h-full w-full resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-200 transition-all duration-200 bg-white/50"
+                className={`h-full w-full resize-none text-base leading-relaxed border-2 ${activeNotebookColorClass} focus:border-blue-200 transition-all duration-200 bg-white/50`}
                 aria-label="Shared text area for real-time collaboration"
                 disabled={!currentUsernameRef.current}
               />
@@ -978,7 +1029,6 @@ export default function RoomPage() {
             </div>
           </Card>
           {/* Footer Info */}
-         
         </SidebarInset>
       </div>
     </SidebarProvider>

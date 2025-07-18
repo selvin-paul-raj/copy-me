@@ -19,10 +19,10 @@ This guide covers different deployment options for Copy-ME.
 
 ### Required Environment Variables
 
-```env
+\`\`\`env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
-```
+\`\`\`
 
 ### Getting Supabase Credentials
 
@@ -38,7 +38,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
    - Copy the `anon` `public` key
 
 3. **Set up the Database**
-   ```sql
+   \`\`\`sql
    -- Create the rooms table
    CREATE TABLE rooms (
      id TEXT PRIMARY KEY,
@@ -59,7 +59,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
    -- Create index for performance
    CREATE INDEX idx_rooms_expires_at ON rooms(expires_at);
    CREATE INDEX idx_rooms_last_active ON rooms(last_active);
-   ```
+   \`\`\`
 
 ---
 
@@ -67,7 +67,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
 ### Vercel
 
-```bash
+\`\`\`bash
 # Install Vercel CLI
 npm install -g vercel
 
@@ -80,7 +80,7 @@ vercel env add NEXT_PUBLIC_SUPABASE_ANON_KEY
 
 # Redeploy with environment variables
 vercel --prod
-```
+\`\`\`
 
 ### Netlify
 
@@ -90,10 +90,10 @@ vercel --prod
    - Connect your GitHub repository
 
 2. **Build Settings**
-   ```
+   \`\`\`
    Build command: npm run build
    Publish directory: .next
-   ```
+   \`\`\`
 
 3. **Environment Variables**
    - Go to Site settings → Environment variables
@@ -101,7 +101,7 @@ vercel --prod
 
 ### Railway
 
-```bash
+\`\`\`bash
 # Install Railway CLI
 npm install -g @railway/cli
 
@@ -116,7 +116,7 @@ railway variables set NEXT_PUBLIC_SUPABASE_ANON_KEY=your-key
 
 # Deploy
 railway up
-```
+\`\`\`
 
 ### DigitalOcean App Platform
 
@@ -126,10 +126,10 @@ railway up
    - Connect your GitHub repository
 
 2. **Configure Build**
-   ```
+   \`\`\`
    Build Command: npm run build
    Run Command: npm start
-   ```
+   \`\`\`
 
 3. **Environment Variables**
    - Add your Supabase credentials in the app settings
@@ -140,7 +140,7 @@ railway up
 
 ### Dockerfile
 
-```dockerfile
+\`\`\`dockerfile
 FROM node:18-alpine AS base
 
 # Install dependencies only when needed
@@ -185,11 +185,11 @@ ENV PORT 3000
 ENV HOSTNAME "0.0.0.0"
 
 CMD ["node", "server.js"]
-```
+\`\`\`
 
 ### Docker Compose
 
-```yaml
+\`\`\`yaml
 version: '3.8'
 
 services:
@@ -201,11 +201,11 @@ services:
       - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
     restart: unless-stopped
-```
+\`\`\`
 
 ### Build and Run
 
-```bash
+\`\`\`bash
 # Build the image
 docker build -t copy-me .
 
@@ -217,7 +217,7 @@ docker run -p 3000:3000 \
 
 # Or use docker-compose
 docker-compose up -d
-```
+\`\`\`
 
 ---
 
@@ -230,7 +230,7 @@ docker-compose up -d
    - Connect your GitHub repository
 
 2. **Build Settings**
-   ```yaml
+   \`\`\`yaml
    version: 1
    frontend:
      phases:
@@ -247,11 +247,11 @@ docker-compose up -d
      cache:
        paths:
          - node_modules/**/*
-   ```
+   \`\`\`
 
 ### Google Cloud Platform
 
-```bash
+\`\`\`bash
 # Install gcloud CLI
 # https://cloud.google.com/sdk/docs/install
 
@@ -263,11 +263,11 @@ gcloud run deploy copy-me \
   --allow-unauthenticated \
   --set-env-vars NEXT_PUBLIC_SUPABASE_URL=your-url \
   --set-env-vars NEXT_PUBLIC_SUPABASE_ANON_KEY=your-key
-```
+\`\`\`
 
 ### Azure
 
-```bash
+\`\`\`bash
 # Install Azure CLI
 # https://docs.microsoft.com/en-us/cli/azure/install-azure-cli
 
@@ -285,7 +285,7 @@ az webapp config appsettings set --resource-group copy-me-rg --name copy-me-app 
 
 # Deploy
 az webapp deployment source config --resource-group copy-me-rg --name copy-me-app --repo-url https://github.com/your-username/copy_me --branch main
-```
+\`\`\`
 
 ---
 
@@ -293,7 +293,7 @@ az webapp deployment source config --resource-group copy-me-rg --name copy-me-ap
 
 ### Using PM2
 
-```bash
+\`\`\`bash
 # Install PM2
 npm install -g pm2
 
@@ -319,11 +319,11 @@ echo 'module.exports = {
 pm2 start ecosystem.config.js
 pm2 save
 pm2 startup
-```
+\`\`\`
 
 ### Nginx Configuration
 
-```nginx
+\`\`\`nginx
 server {
     listen 80;
     server_name your-domain.com;
@@ -340,7 +340,7 @@ server {
         proxy_cache_bypass $http_upgrade;
     }
 }
-```
+\`\`\`
 
 ---
 
@@ -358,14 +358,14 @@ server {
 
 ### Supabase Security
 
-```sql
+\`\`\`sql
 -- Create more restrictive RLS policies
 CREATE POLICY "Users can only access active rooms" ON rooms
 FOR SELECT USING (expires_at > now());
 
 CREATE POLICY "Users can only update recent rooms" ON rooms
 FOR UPDATE USING (last_active > now() - interval '1 hour');
-```
+\`\`\`
 
 ---
 
@@ -375,7 +375,7 @@ FOR UPDATE USING (last_active > now() - interval '1 hour');
 
 Add to your deployment:
 
-```typescript
+\`\`\`typescript
 // pages/api/health.ts
 export default function handler(req, res) {
   res.status(200).json({ 
@@ -384,7 +384,7 @@ export default function handler(req, res) {
     version: process.env.npm_package_version 
   });
 }
-```
+\`\`\`
 
 ### Monitoring Services
 
@@ -399,7 +399,7 @@ export default function handler(req, res) {
 
 ### GitHub Actions
 
-```yaml
+\`\`\`yaml
 # .github/workflows/deploy.yml
 name: Deploy to Production
 
@@ -428,7 +428,7 @@ jobs:
           vercel-org-id: ${{ secrets.ORG_ID }}
           vercel-project-id: ${{ secrets.PROJECT_ID }}
           vercel-args: '--prod'
-```
+\`\`\`
 
 ---
 

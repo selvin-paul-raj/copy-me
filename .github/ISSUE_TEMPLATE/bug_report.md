@@ -45,6 +45,6 @@ Add any other context about the problem here.
 
 ## 📊 Console Logs
 If you're comfortable, please include any console errors:
-```
+\`\`\`
 Paste console logs here
-```
+\`\`\`

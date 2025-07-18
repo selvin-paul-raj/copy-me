@@ -1,11 +1,13 @@
 import { createClient } from "@supabase/supabase-js" // Import createClient
 import { generateShortId } from "@/lib/in-memory-store" // Re-using generateShortId
+import { getNotebookColor } from "@/lib/colors" // Import getNotebookColor
 
 export interface Notebook {
   id: string
   name: string
   content: string
   lastUpdate: number
+  color: string // Added color property
 }
 
 export interface UserPresence {
@@ -78,6 +80,7 @@ export async function createRoomInDb(username: string, userId: string): Promise<
     name: "Main Notebook",
     content: "",
     lastUpdate: Date.now(),
+    color: getNotebookColor(0), // Assign first color
   }
 
   const initialUser: UserPresence = {
@@ -137,6 +140,12 @@ export async function getRoomFromDb(roomId: string): Promise<{ room?: RoomData; 
     const now = Date.now()
     const activeUsers = room.users.filter((user) => now - user.lastSeen < USER_INACTIVITY_TIMEOUT)
     room.users = activeUsers // Update the users array in the returned room object
+
+    // Ensure all notebooks have a color property, assigning a default if missing
+    room.notebooks = room.notebooks.map((nb, index) => ({
+      ...nb,
+      color: nb.color || getNotebookColor(index), // Assign a color if missing
+    }))
 
     // Update last_active timestamp (only if not a heartbeat, handled by heartbeat route)
     // This is now handled by the heartbeat route or content update.
@@ -228,6 +237,7 @@ export async function addNotebookToRoomInDb(
     name: notebookName,
     content: "",
     lastUpdate: Date.now(),
+    color: getNotebookColor(room.notebooks.length), // Assign next color
   }
 
   const updatedNotebooks = [...room.notebooks, newNotebook]
