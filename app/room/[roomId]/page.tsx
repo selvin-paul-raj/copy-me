@@ -1,28 +1,12 @@
 "use client"
 
-import type React from "react"
-
 import { SidebarGroupLabel } from "@/components/ui/sidebar"
 
 import { useEffect, useState, useRef, useCallback } from "react"
 import { useParams, useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import {
-  Copy,
-  Zap,
-  Upload,
-  RefreshCw,
-  Share2,
-  Plus,
-  FolderPlus,
-  Trash2,
-  FileText,
-  Loader2,
-  User,
-  Undo2,
-  Redo2,
-} from "lucide-react"
+import { Copy, Zap, Upload, RefreshCw, Share2, Plus, FolderPlus, Trash2, FileText, Loader2, User } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   AlertDialog,
@@ -61,8 +45,6 @@ import {
 import { Textarea } from "@/components/ui/textarea" // Import Textarea directly
 import type { Notebook, UserPresence } from "@/lib/db" // Import UserPresence
 import Homebtn from "@/components/ui/Homebtn" // Import Homebtn component
-import { useTextHistory } from "@/hooks/use-text-history" // Import useTextHistory hook
-
 // Helper to format time for the countdown
 const formatTimeRemaining = (ms: number) => {
   const totalSeconds = Math.floor(ms / 1000)
@@ -82,6 +64,10 @@ export default function RoomPage() {
   const router = useRouter()
   const roomId = params.roomId as string
 
+  const [text, setText] = useState("")
+  // Add new state variables for undo/redo history
+  const [textHistory, setTextHistory] = useState<string[]>([])
+  const [historyIndex, setHistoryIndex] = useState(-1)
   const [isConnected, setIsConnected] = useState(false)
   const [hasUnpublishedChanges, setHasUnpublishedChanges] = useState(false)
   const [showClearAllConfirm, setShowClearAllConfirm] = useState(false)
@@ -107,10 +93,6 @@ export default function RoomPage() {
   const lastKnownServerTextRef = useRef("")
   const lastPublishedTextRef = useRef("")
   const currentUsernameRef = useRef<string>("")
-
-  // Initialize useTextHistory with the current active notebook's content
-  // The initial empty string will be replaced by actual content from fetchLatestContent
-  const { text, setText, undo, redo, canUndo, canRedo, resetHistory } = useTextHistory("")
 
   // Initialize userId and username from URL/localStorage
   useEffect(() => {
@@ -139,27 +121,21 @@ export default function RoomPage() {
       setShowUsernameModal(true)
     }
 
-    // Only fetch content if username and userId are available
     if (currentUsernameRef.current && userIdRef.current) {
       fetchLatestContent(true)
     }
   }, [searchParams])
 
-  // Update active notebook content and reset history when activeNotebookId or notebooks change
+  // Update active notebook content
   useEffect(() => {
     const activeNb = notebooks.find((nb) => nb.id === activeNotebookId)
     if (activeNb) {
-      // Only reset history if the content from the active notebook is different
-      // from the current text in the editor. This prevents resetting history
-      // when the user is actively typing and the `text` state is updated by `setText`.
-      if (text !== activeNb.content) {
-        resetHistory(activeNb.content)
-      }
+      setText(activeNb.content)
       lastKnownServerTextRef.current = activeNb.content
       lastPublishedTextRef.current = activeNb.content
       setHasUnpublishedChanges(false)
     }
-  }, [activeNotebookId, notebooks, resetHistory, text])
+  }, [activeNotebookId, notebooks])
 
   // Room expiry countdown timer
   useEffect(() => {
@@ -196,16 +172,13 @@ export default function RoomPage() {
     currentUsernameRef.current = trimmedUsername
     localStorage.setItem("copy-me-username", trimmedUsername)
     setShowUsernameModal(false)
-    fetchLatestContent(true) // Fetch content after username is set
+    fetchLatestContent(true)
   }
 
+  // Modify fetchLatestContent to reset history
   const fetchLatestContent = useCallback(
     async (forceUpdate = false) => {
-      if (!currentUsernameRef.current || !userIdRef.current) {
-        // If username or userId are not set, don't proceed with fetch
-        // This can happen if the username modal is still open or not submitted
-        return
-      }
+      if (!currentUsernameRef.current || !userIdRef.current) return
 
       setIsFetching(true)
       try {
@@ -240,15 +213,15 @@ export default function RoomPage() {
           const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
           const serverContent = currentNb ? currentNb.content : ""
 
-          // Update text via history hook
-          setText(serverContent) // Use setText from useTextHistory
+          setText(serverContent)
           lastKnownServerTextRef.current = serverContent
-          if (serverContent === lastPublishedTextRef.current) {
-            setHasUnpublishedChanges(false)
-          }
-
+          lastPublishedTextRef.current = serverContent
+          setHasUnpublishedChanges(false)
           setIsConnected(true)
-          setRoomExistsOnServer(true)
+
+          // Reset history on successful fetch
+          setTextHistory([serverContent])
+          setHistoryIndex(0)
         } else if (response.status === 404) {
           setRoomExistsOnServer(false)
           setIsConnected(false)
@@ -280,17 +253,47 @@ export default function RoomPage() {
         setIsFetching(false)
       }
     },
-    [roomId, toast, activeNotebookId, setText], // Depend on setText
+    [roomId, toast, activeNotebookId],
   )
 
+  // Modify handleTextChange to manage history
   const handleTextChange = useCallback(
-    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-      setText(e.target.value) // Use setText from useTextHistory
+    (value: string) => {
+      setText(value)
       setHasUnpublishedChanges(true)
+
+      // Update history
+      setTextHistory((prevHistory) => {
+        const newHistory = prevHistory.slice(0, historyIndex + 1)
+        newHistory.push(value)
+        return newHistory
+      })
+      setHistoryIndex((prevIndex) => prevIndex + 1)
     },
-    [setText],
+    [historyIndex],
   )
 
+  // Add undo function
+  const handleUndo = useCallback(() => {
+    if (historyIndex > 0) {
+      const newIndex = historyIndex - 1
+      setText(textHistory[newIndex])
+      setHistoryIndex(newIndex)
+      setHasUnpublishedChanges(textHistory[newIndex] !== lastPublishedTextRef.current)
+    }
+  }, [historyIndex, textHistory])
+
+  // Add redo function
+  const handleRedo = useCallback(() => {
+    if (historyIndex < textHistory.length - 1) {
+      const newIndex = historyIndex + 1
+      setText(textHistory[newIndex])
+      setHistoryIndex(newIndex)
+      setHasUnpublishedChanges(textHistory[newIndex] !== lastPublishedTextRef.current)
+    }
+  }, [historyIndex, textHistory])
+
+  // Modify handlePublish to reset history
   const handlePublish = useCallback(async () => {
     if (!roomExistsOnServer || !currentUsernameRef.current || !userIdRef.current) return
     setIsPublishing(true) // Set publishing state
@@ -321,12 +324,10 @@ export default function RoomPage() {
         setExpiresAt(data.expiresAt) // Update expiry time
 
         const currentNb = data.notebooks.find((nb: Notebook) => nb.id === activeNotebookId)
-        const serverContent = currentNb ? currentNb.content : ""
-
-        // Update text via history hook after successful publish
-        setText(serverContent) // Use setText from useTextHistory
-        lastKnownServerTextRef.current = serverContent
-        lastPublishedTextRef.current = serverContent
+        const newText = currentNb ? currentNb.content : ""
+        setText(newText)
+        lastKnownServerTextRef.current = newText
+        lastPublishedTextRef.current = newText
         setHasUnpublishedChanges(false)
         setIsConnected(true)
         toast({
@@ -334,6 +335,9 @@ export default function RoomPage() {
           description: "Your changes are now live for everyone.",
           duration: 2000,
         })
+        // Reset history on successful publish
+        setTextHistory([newText])
+        setHistoryIndex(0)
       } else if (response.status === 404) {
         setRoomExistsOnServer(false)
         setIsConnected(false)
@@ -364,7 +368,7 @@ export default function RoomPage() {
     } finally {
       setIsPublishing(false) // Reset publishing state
     }
-  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId, setText]) // Depend on setText
+  }, [text, roomId, roomExistsOnServer, toast, activeNotebookId])
 
   const copyToClipboard = async () => {
     try {
@@ -409,7 +413,7 @@ export default function RoomPage() {
 
   const handleClear = () => {
     if (text.trim() !== "") {
-      setText("") // Use setText from useTextHistory
+      setText("")
       setHasUnpublishedChanges(true)
       toast({
         title: "🗑️ Cleared Locally",
@@ -422,7 +426,7 @@ export default function RoomPage() {
   }
 
   const confirmClearAll = useCallback(async () => {
-    setText("") // Use setText from useTextHistory
+    setText("")
     setHasUnpublishedChanges(true)
     setShowClearAllConfirm(false)
     await handlePublish()
@@ -431,7 +435,7 @@ export default function RoomPage() {
       description: "The text has been cleared for all connected users.",
       duration: 2500,
     })
-  }, [handlePublish, setText]) // Depend on setText
+  }, [handlePublish])
 
   const handleAddNotebook = async () => {
     if (!newNotebookName.trim()) {
@@ -550,14 +554,6 @@ export default function RoomPage() {
       setIsDeletingNotebook(false) // Reset loading state
     }
   }
-
-  // Get the color for the active notebook
-  const activeNotebook = notebooks.find((nb) => nb.id === activeNotebookId)
-  // Ensure a default color class if activeNotebook or its color is undefined
-  const activeNotebookColorClass = activeNotebook?.color || "border-gray-300"
-
-  // Determine if the textarea should be disabled
-  const isTextareaDisabled = !currentUsernameRef.current || isFetching || isPublishing
 
   if (!roomExistsOnServer) {
     return (
@@ -698,16 +694,15 @@ export default function RoomPage() {
               <SidebarMenu>
                 {notebooks.map((notebook) => (
                   <SidebarMenuItem key={notebook.id}>
+                    {/* Update the SidebarMenuButton className for active state in the desktop sidebar */}
                     <SidebarMenuButton
                       isActive={activeNotebookId === notebook.id}
                       onClick={() => setActiveNotebookId(notebook.id)}
-                      className="justify-between"
+                      className="justify-between data-[active=true]:bg-blue-100 data-[active=true]:text-blue-800 data-[active=true]:font-semibold"
                     >
                       <span className="flex items-center gap-2">
                         <FileText className="w-4 h-4" />
                         {notebook.name}
-                        {/* Notebook color indicator */}
-                        <span className={`w-2 h-2 rounded-full ${notebook.color.replace("border-", "bg-")}`}></span>
                       </span>
                       {notebooks.length > 1 && (
                         <Button
@@ -790,16 +785,15 @@ export default function RoomPage() {
               <SidebarMenu>
                 {notebooks.map((notebook) => (
                   <SidebarMenuItem key={notebook.id}>
+                    {/* Update the SidebarMenuButton className for active state in the mobile sidebar */}
                     <SidebarMenuButton
                       isActive={activeNotebookId === notebook.id}
                       onClick={() => setActiveNotebookId(notebook.id)}
-                      className="justify-between text-slate-300 hover:text-white hover:bg-slate-800 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
+                      className="justify-between text-black hover:text-white hover:bg-blue-600 data-[active=true]:bg-blue-600 data-[active=true]:text-white"
                     >
                       <span className="flex items-center gap-2 text-black">
                         <FileText className="w-4 h-4" />
                         {notebook.name}
-                        {/* Notebook color indicator */}
-                        <span className={`w-2 h-2 rounded-full ${notebook.color.replace("border-", "bg-")}`}></span>
                       </span>
                       {notebooks.length > 1 && (
                         <Button
@@ -929,6 +923,55 @@ export default function RoomPage() {
                   {isFetching ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                   <span className="hidden sm:inline">Refresh</span>
                 </Button>
+                {/* Add Undo and Redo buttons to the toolbar */}
+                <Button
+                  onClick={handleUndo}
+                  variant="outline"
+                  size="sm"
+                  disabled={historyIndex <= 0}
+                  className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-4 h-4"
+                  >
+                    <path d="M9.5 12.5L4.5 7.5L9.5 2.5"></path>
+                    <path d="M18 15H12C9.23858 15 7 17.2386 7 20V21"></path>
+                  </svg>
+                  <span className="hidden sm:inline">Undo</span>
+                </Button>
+                <Button
+                  onClick={handleRedo}
+                  variant="outline"
+                  size="sm"
+                  disabled={historyIndex >= textHistory.length - 1}
+                  className="hover:bg-gray-50 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    width="24"
+                    height="24"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="w-4 h-4"
+                  >
+                    <path d="M14.5 12.5L19.5 7.5L14.5 2.5"></path>
+                    <path d="M6 15H12C14.7614 15 17 17.2386 17 20V21"></path>
+                  </svg>
+                  <span className="hidden sm:inline">Redo</span>
+                </Button>
                 <AlertDialog open={showClearAllConfirm} onOpenChange={setShowClearAllConfirm}>
                   <AlertDialogTrigger asChild>
                     <Button
@@ -964,28 +1007,6 @@ export default function RoomPage() {
                   <Copy className="w-4 h-4" />
                   <span className="hidden sm:inline">Copy All</span>
                 </Button>
-                {/* Undo Button */}
-                <Button
-                  onClick={undo}
-                  size="sm"
-                  disabled={!canUndo}
-                  variant="outline"
-                  className="hover:bg-gray-100 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
-                >
-                  <Undo2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Undo</span>
-                </Button>
-                {/* Redo Button */}
-                <Button
-                  onClick={redo}
-                  size="sm"
-                  disabled={!canRedo}
-                  variant="outline"
-                  className="hover:bg-gray-100 hover:border-gray-200 hover:text-gray-600 transition-colors bg-transparent"
-                >
-                  <Redo2 className="w-4 h-4" />
-                  <span className="hidden sm:inline">Redo</span>
-                </Button>
                 <Button
                   onClick={handlePublish}
                   size="sm"
@@ -1002,11 +1023,11 @@ export default function RoomPage() {
               <Textarea
                 ref={textareaRef}
                 value={text}
-                onChange={handleTextChange} // Use the new handler
+                onChange={(e) => handleTextChange(e.target.value)}
                 placeholder="🚀 Start typing here... "
-                className={`h-full w-full resize-none text-base leading-relaxed border-2 ${activeNotebookColorClass} focus:border-blue-200 transition-all duration-200 bg-white/50`}
+                className="h-full w-full resize-none text-base leading-relaxed border-2 border-blue-100 focus:border-blue-200 transition-all duration-200 bg-white/50"
                 aria-label="Shared text area for real-time collaboration"
-                disabled={isTextareaDisabled} // Use the new disabled state
+                disabled={!currentUsernameRef.current}
               />
             </div>
             {/* Dynamic Stats Bar */}
