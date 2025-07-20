@@ -82,40 +82,43 @@ Ensure you have the following installed:
 ### Quick Installation
 
 1. **Clone the repository**
-   \`\`\`bash
+   ```
    git clone https://github.com/selvin-paul-raj/copy_me.git
    cd copy_me
-   \`\`\`
+   ```
 
-2. **Install dependencies**
-   \`\`\`bash
+3. **Install dependencies**
+  
    # Using npm
+    ```
    npm install
-
+   ```
    # Using yarn
+   ```
    yarn install
-
+   ```
    # Using pnpm
+   ```
    pnpm install
-   \`\`\`
+   ```
 
-3. **Environment Setup**
+5. **Environment Setup**
    
    Create a `.env.local` file in the root directory:
-   \`\`\`env
+  ```
    NEXT_PUBLIC_SUPABASE_URL=your_supabase_project_url
    NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-   \`\`\`
+   ```
 
    **Get Supabase credentials:**
    - Visit [Supabase](https://supabase.com/) and create a new project
    - Go to Settings → API to find your project URL and anon key
    - Replace the values in your `.env.local` file
 
-4. **Database Setup**
+6. **Database Setup**
    
    Create the following table in your Supabase database:
-   \`\`\`sql
+   ```
    CREATE TABLE rooms (
      id TEXT PRIMARY KEY,
      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -130,14 +133,14 @@ Ensure you have the following installed:
    
    CREATE POLICY "Allow all operations on rooms" ON rooms
    FOR ALL USING (true) WITH CHECK (true);
-   \`\`\`
+   ```
 
-5. **Start the development server**
-   \`\`\`bash
+7. **Start the development server**
+   ```
    npm run dev
-   \`\`\`
+   ```
 
-6. **Open your browser**
+8. **Open your browser**
    
    Navigate to [http://localhost:3000](http://localhost:3000) to see the application running.
 
@@ -166,7 +169,7 @@ Ensure you have the following installed:
 
 ## 📁 Project Structure
 
-\`\`\`
+```
 copy_me/
 ├── app/                          # Next.js 14 App Router
 │   ├── api/                      # API Routes
@@ -192,7 +195,7 @@ copy_me/
 ├── hooks/                        # Custom React hooks
 ├── public/                       # Static assets
 └── styles/                       # Additional stylesheets
-\`\`\`
+````
 
 ---
 
@@ -230,10 +233,10 @@ copy_me/
    - Visit [Vercel](https://vercel.com/)
    - Import your forked repository
    - Configure environment variables:
-     \`\`\`
+     ```
      NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
      NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
-     \`\`\`
+     ```
 
 3. **Deploy**: Vercel will automatically build and deploy your application
 
@@ -250,7 +253,7 @@ The application can be deployed on any platform that supports Next.js:
 
 Create a `.env.local` file with the following variables:
 
-\`\`\`env
+```
 # Supabase Configuration
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
@@ -258,7 +261,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 # Optional: Custom configuration
 NEXT_PUBLIC_APP_NAME=Copy-ME
 NEXT_PUBLIC_APP_URL=https://your-domain.com
-\`\`\`
+```
 
 ---
 
